@@ -1,0 +1,28 @@
+# --- 虛擬環境 (最重要) ---
+# 這是你剛剛建立的環境，檔案很大且每台電腦路徑不同，絕對不能上傳
+venv/
+env/
+.env
+.venv/
+
+# --- Python 編譯檔 ---
+# 這是 Python 執行時自動產生的暫存檔，不需要上傳
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# --- 專案資料檔 ---
+# 這是程式跑出來的紀錄，屬於個人數據，通常不放上 git
+# timer_log.csv
+
+# --- IDE 設定檔 ---
+# VS Code 或 PyCharm 的個人設定
+.vscode/
+.idea/
+
+# --- 作業系統產生的雜檔 ---
+# Mac 的 Finder 產生的檔案
+.DS_Store
+# Windows 的縮圖快取
+Thumbs.db
