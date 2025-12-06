@@ -26,3 +26,5 @@ __pycache__/
 .DS_Store
 # Windows 的縮圖快取
 Thumbs.db
+
+.csv
