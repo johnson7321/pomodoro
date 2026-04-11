@@ -27,4 +27,8 @@ __pycache__/
 # Windows 的縮圖快取
 Thumbs.db
 
+# --- PyInstaller 產物 ---
+build/
+dist/
+
 .csv
