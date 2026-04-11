@@ -3,6 +3,7 @@ import tkinter as tk
 from tkinter import messagebox
 import csv
 import os
+import threading
 from datetime import datetime, timedelta
 import math
 
@@ -16,7 +17,6 @@ plt.rcParams['axes.unicode_minus'] = False
 ctk.set_appearance_mode("System")
 ctk.set_default_color_theme("blue")
 
-# ── 各模式設定 ────────────────────────────────────────────────
 MODE_CFG = {
     "work": {
         "name": "專注 🔥", "csv": "專注",
@@ -49,27 +49,27 @@ class ModernLoggerTimer:
         self.root.geometry("420x700")
         self.root.resizable(False, False)
 
-        # ── 狀態 ──
         self.filename     = "timer_log.csv"
         self.timer_id     = None
         self.is_running   = False
         self.current_mode = "work"
         self.elapsed_time = 0
 
-        # ── 時長設定 ──
         self.work_duration  = 25 * 60
         self.break_duration = 5 * 60
         self.remaining_time = self.work_duration
 
-        # ── 計數 ──
-        self.work_count = 0
-
+        self.work_count    = 0
         self.always_on_top = False
+        self._is_mini      = False
 
+        # Root only needs one cell
         self.root.grid_columnconfigure(0, weight=1)
-        self.root.grid_rowconfigure(list(range(10)), weight=1)
+        self.root.grid_rowconfigure(0, weight=1)
 
         self._build_ui()
+        self._build_mini_ui()
+
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         self._bind_keyboard_shortcuts()
         self._load_today_counts()
@@ -78,8 +78,16 @@ class ModernLoggerTimer:
     # UI 建立
     # =========================================================
     def _build_ui(self):
+        # All main content lives in main_frame so we can hide it for mini mode
+        self.main_frame = ctk.CTkFrame(self.root, fg_color="transparent")
+        self.main_frame.grid(row=0, column=0, sticky="nsew")
+        self.main_frame.grid_columnconfigure(0, weight=1)
+        self.main_frame.grid_rowconfigure(list(range(10)), weight=1)
+
+        mf = self.main_frame   # shorthand
+
         # ── Row 0: 頂部工具列 ──
-        top_bar = ctk.CTkFrame(self.root, fg_color="transparent")
+        top_bar = ctk.CTkFrame(mf, fg_color="transparent")
         top_bar.grid(row=0, column=0, sticky="ew", padx=20, pady=(18, 0))
         top_bar.grid_columnconfigure(1, weight=1)
 
@@ -104,11 +112,10 @@ class ModernLoggerTimer:
         self.btn_ontop.grid(row=0, column=2, sticky="e")
 
         # ── Row 1: 圓形計時器 ──
-        self._build_timer_canvas()
+        self._build_timer_canvas(mf)
 
         # ── Row 2: 設定卡 ──
-        settings_card = ctk.CTkFrame(
-            self.root, fg_color=("gray90", "gray18"), corner_radius=14)
+        settings_card = ctk.CTkFrame(mf, fg_color=("gray90", "gray18"), corner_radius=14)
         settings_card.grid(row=2, column=0, padx=30, pady=(0, 4), sticky="ew")
         inner = ctk.CTkFrame(settings_card, fg_color="transparent")
         inner.pack(pady=8)
@@ -133,7 +140,7 @@ class ModernLoggerTimer:
 
         # ── Row 3: 模式切換 ──
         self.mode_selector = ctk.CTkSegmentedButton(
-            self.root,
+            mf,
             values=["專注 🔥", "休息 💤"],
             command=self._on_mode_selected,
             font=("微軟正黑體", 14, "bold"),
@@ -143,7 +150,7 @@ class ModernLoggerTimer:
         self.mode_selector.grid(row=3, column=0, padx=30, pady=4, sticky="ew")
 
         # ── Row 4: 控制按鈕 ──
-        btn_row = ctk.CTkFrame(self.root, fg_color="transparent")
+        btn_row = ctk.CTkFrame(mf, fg_color="transparent")
         btn_row.grid(row=4, column=0, pady=4)
         btn_kw = dict(width=96, height=40, corner_radius=20,
                       font=("微軟正黑體", 14, "bold"))
@@ -167,7 +174,7 @@ class ModernLoggerTimer:
 
         # ── Row 5: 計數標籤 ──
         self.count_label = ctk.CTkLabel(
-            self.root,
+            mf,
             text="🍅 今日完成：0 次專注",
             font=("微軟正黑體", 13),
             text_color=("gray45", "gray65"),
@@ -175,13 +182,13 @@ class ModernLoggerTimer:
         self.count_label.grid(row=5, column=0, pady=2)
 
         # ── Row 6: 分隔線 ──
-        ctk.CTkFrame(self.root, height=1,
+        ctk.CTkFrame(mf, height=1,
                      fg_color=("gray80", "gray30")
                      ).grid(row=6, column=0, sticky="ew", padx=30, pady=6)
 
         # ── Row 7: 時間軸按鈕 ──
         self.btn_history = ctk.CTkButton(
-            self.root, text="📊  查看今日時間軸",
+            mf, text="📊  查看今日時間軸",
             command=self.open_history_chart,
             font=("微軟正黑體", 13), height=36, corner_radius=10,
             fg_color=("gray80", "gray25"), hover_color=("gray70", "gray32"),
@@ -191,7 +198,7 @@ class ModernLoggerTimer:
 
         # ── Row 8: 詳細列表按鈕 ──
         self.btn_list = ctk.CTkButton(
-            self.root, text="📅  查看詳細列表",
+            mf, text="📅  查看詳細列表",
             command=self.open_history_list,
             font=("微軟正黑體", 13), height=36, corner_radius=10,
             fg_color="transparent", border_width=1,
@@ -202,12 +209,34 @@ class ModernLoggerTimer:
         self.btn_list.grid(row=8, column=0, padx=30, pady=(0, 4), sticky="ew")
 
         # ── Row 9: 底部路徑 ──
-        ctk.CTkLabel(self.root, text=f"紀錄檔：{self.filename}",
+        ctk.CTkLabel(mf, text=f"紀錄檔：{self.filename}",
                      text_color=("gray60", "gray50"),
                      font=("Segoe UI", 10),
                      ).grid(row=9, column=0, pady=(0, 12))
 
-    def _build_timer_canvas(self):
+    def _build_mini_ui(self):
+        """小視窗懸浮元件（僅 pin 模式下縮小時顯示）。"""
+        self.mini_frame = ctk.CTkFrame(
+            self.root,
+            fg_color=MODE_CFG["work"]["color"],
+            corner_radius=16,
+        )
+        self.mini_frame.grid(row=0, column=0, sticky="nsew")
+        self.mini_frame.grid_remove()   # 預設隱藏
+
+        self._mini_time_lbl = ctk.CTkLabel(
+            self.mini_frame,
+            text=self.format_time(self.remaining_time),
+            font=("Segoe UI", 36, "bold"),
+            text_color="white",
+        )
+        self._mini_time_lbl.pack(expand=True)
+
+        # 點擊任意處還原
+        self.mini_frame.bind("<Button-1>", lambda e: self._exit_mini_mode())
+        self._mini_time_lbl.bind("<Button-1>", lambda e: self._exit_mini_mode())
+
+    def _build_timer_canvas(self, parent):
         is_dark = ctk.get_appearance_mode() == "Dark"
         self._canvas_bg  = "#242424" if is_dark else "#EBEBEB"
         self._ring_track = "#3A3A3A" if is_dark else "#DEDEDE"
@@ -215,7 +244,7 @@ class ModernLoggerTimer:
 
         SIZE = 230
         self.timer_canvas = tk.Canvas(
-            self.root, width=SIZE, height=SIZE,
+            parent, width=SIZE, height=SIZE,
             bg=self._canvas_bg, highlightthickness=0)
         self.timer_canvas.grid(row=1, column=0, pady=8)
 
@@ -244,6 +273,8 @@ class ModernLoggerTimer:
     # ── Canvas 輔助 ───────────────────────────────────────────
     def _set_time_display(self, text):
         self.timer_canvas.itemconfig(self._time_text_id, text=text)
+        if self._is_mini:
+            self._mini_time_lbl.configure(text=text)
 
     def _set_sub_text(self, text):
         self.timer_canvas.itemconfig(self._sub_text_id, text=text)
@@ -269,6 +300,40 @@ class ModernLoggerTimer:
         if mode != "overtime":
             self.btn_start.configure(
                 fg_color=cfg["color"], hover_color=cfg["hover"])
+        # keep mini background in sync
+        if self._is_mini:
+            self.mini_frame.configure(fg_color=cfg["color"])
+
+    # =========================================================
+    # Mini Mode
+    # =========================================================
+    def _on_unmap(self, event):
+        """Intercept minimize when pin is active."""
+        if event.widget is self.root and self.always_on_top and not self._is_mini:
+            self.root.after(1, self._enter_mini_mode)
+
+    def _enter_mini_mode(self):
+        self.root.deiconify()
+        self._is_mini = True
+        # Sync content
+        current_text = self.timer_canvas.itemcget(self._time_text_id, "text")
+        self._mini_time_lbl.configure(text=current_text)
+        self.mini_frame.configure(fg_color=MODE_CFG[self.current_mode]["color"])
+        # Resize
+        self.root.resizable(True, True)
+        self.root.geometry("200x80")
+        self.root.resizable(False, False)
+        # Swap frames
+        self.main_frame.grid_remove()
+        self.mini_frame.grid()
+
+    def _exit_mini_mode(self):
+        self._is_mini = False
+        self.mini_frame.grid_remove()
+        self.main_frame.grid()
+        self.root.resizable(True, True)
+        self.root.geometry("420x700")
+        self.root.resizable(False, False)
 
     # =========================================================
     # 模式切換
@@ -354,6 +419,16 @@ class ModernLoggerTimer:
         return 0
 
     # =========================================================
+    # 每日重置時間（凌晨 4 點）
+    # =========================================================
+    def _get_logical_date(self):
+        """凌晨 4 點前算前一天。"""
+        now = datetime.now()
+        if now.hour < 4:
+            return (now - timedelta(days=1)).strftime("%Y-%m-%d")
+        return now.strftime("%Y-%m-%d")
+
+    # =========================================================
     # 設定 & 輔助
     # =========================================================
     def _get_target_duration(self):
@@ -383,6 +458,19 @@ class ModernLoggerTimer:
         )
 
     # =========================================================
+    # 鬧鐘（背景執行緒，不阻塞 UI）
+    # =========================================================
+    def _play_alarm(self):
+        def _sound():
+            try:
+                import winsound
+                winsound.PlaySound("SystemExclamation", winsound.SND_ALIAS)
+                winsound.PlaySound("SystemExclamation", winsound.SND_ALIAS)
+            except Exception:
+                pass
+        threading.Thread(target=_sound, daemon=True).start()
+
+    # =========================================================
     # 計時核心
     # =========================================================
     def update_clock(self):
@@ -408,12 +496,7 @@ class ModernLoggerTimer:
             self.root.after_cancel(self.timer_id)
         self.is_running = False
 
-        try:
-            import winsound
-            winsound.Beep(1000, 300)
-            winsound.Beep(1200, 300)
-        except Exception:
-            pass
+        self._play_alarm()
 
         if self.current_mode == "work":
             self.work_count += 1
@@ -496,10 +579,10 @@ class ModernLoggerTimer:
     def save_log(self):
         if self.elapsed_time == 0:
             return
-        timestamp  = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        csv_name   = MODE_CFG[self.current_mode]["csv"]
-        prefix     = "+" if self.current_mode == "overtime" else ""
-        duration   = prefix + self.format_time(self.elapsed_time)
+        timestamp   = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        csv_name    = MODE_CFG[self.current_mode]["csv"]
+        prefix      = "+" if self.current_mode == "overtime" else ""
+        duration    = prefix + self.format_time(self.elapsed_time)
         file_exists = os.path.isfile(self.filename)
         try:
             with open(self.filename, mode='a', newline='', encoding='utf-8-sig') as f:
@@ -514,7 +597,7 @@ class ModernLoggerTimer:
     def _load_today_counts(self):
         if not os.path.exists(self.filename):
             return
-        today_str = datetime.now().strftime("%Y-%m-%d")
+        today_str = self._get_logical_date()   # 4 AM reset
         count = 0
         try:
             with open(self.filename, mode='r', encoding='utf-8-sig') as f:
@@ -522,7 +605,7 @@ class ModernLoggerTimer:
                 next(reader, None)
                 for row in reader:
                     if len(row) >= 3 and row[0].startswith(today_str):
-                        if row[1] == "專注":
+                        if row[1] in ("專注", "工作", "讀書"):
                             count += 1
         except Exception:
             pass
@@ -538,11 +621,15 @@ class ModernLoggerTimer:
         if self.always_on_top:
             self.btn_ontop.configure(
                 fg_color="#3B8ED0", text_color="white", border_color="#3B8ED0")
+            self.root.bind("<Unmap>", self._on_unmap)
         else:
             self.btn_ontop.configure(
                 fg_color="transparent",
                 text_color=("gray30", "gray80"),
                 border_color=("gray75", "gray45"))
+            self.root.unbind("<Unmap>")
+            if self._is_mini:
+                self._exit_mini_mode()
 
     def _bind_keyboard_shortcuts(self):
         self.root.bind(
@@ -559,7 +646,7 @@ class ModernLoggerTimer:
             messagebox.showinfo("提示", "目前還沒有紀錄喔！")
             return
 
-        today_str = datetime.now().strftime("%Y-%m-%d")
+        today_str = self._get_logical_date()   # 4 AM reset
         all_acts  = ["專注", "休息", "超時休息"]
         intervals = {a: [] for a in all_acts}
         totals    = {a: 0  for a in all_acts}
@@ -572,7 +659,6 @@ class ModernLoggerTimer:
                 for row in reader:
                     if len(row) >= 3 and row[0].startswith(today_str):
                         ts, act, dur_str = row[0], row[1], row[2]
-                        # 舊資料相容：工作/讀書 → 專注
                         if act in ("工作", "讀書"):
                             act = "專注"
                         if act not in intervals:
@@ -636,8 +722,7 @@ class ModernLoggerTimer:
 
         for act, ivs in intervals.items():
             if ivs:
-                ax.broken_barh(ivs, Y_POS[act],
-                               facecolors=COLOR_MAP[act], label=act)
+                ax.broken_barh(ivs, Y_POS[act], facecolors=COLOR_MAP[act], label=act)
 
         display_min = math.floor(min_hour)
         display_max = min(math.ceil(max_hour) + 1, 24)
@@ -695,8 +780,8 @@ class ModernLoggerTimer:
 
         CARD = {
             "專注":    ("#E8F5E9", "#1B5E20", "#2E7D32"),
-            "工作":    ("#E8F5E9", "#1B5E20", "#2E7D32"),   # 舊資料相容
-            "讀書":    ("#E8F5E9", "#1B5E20", "#2E7D32"),   # 舊資料相容
+            "工作":    ("#E8F5E9", "#1B5E20", "#2E7D32"),
+            "讀書":    ("#E8F5E9", "#1B5E20", "#2E7D32"),
             "休息":    ("#E3F2FD", "#0D47A1", "#1565C0"),
             "超時休息": ("#FFEBEE", "#B71C1C", "#C62828"),
         }
@@ -716,8 +801,6 @@ class ModernLoggerTimer:
             colors  = CARD.get(activity, ("#F5F5F5", "#212121", "#424242"))
             card_bg = colors[2] if is_dark else colors[0]
             txt     = "white"   if is_dark else colors[1]
-
-            # 顯示標籤：舊資料工作/讀書 → 顯示為「專注」
             display_act = "專注" if activity in ("工作", "讀書") else activity
 
             card = ctk.CTkFrame(scroll, fg_color=card_bg, corner_radius=8)
