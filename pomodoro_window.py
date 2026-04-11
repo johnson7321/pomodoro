@@ -19,16 +19,10 @@ ctk.set_default_color_theme("blue")
 # ── 各模式設定 ────────────────────────────────────────────────
 MODE_CFG = {
     "work": {
-        "name": "工作 🔥", "csv": "工作",
+        "name": "專注 🔥", "csv": "專注",
         "color": "#2CC985", "hover": "#23A870",
         "badge_light": ("#C8F0DC", "#1B5E20"),
         "badge_dark":  ("#1B4332", "#2CC985"),
-    },
-    "study": {
-        "name": "讀書 📚", "csv": "讀書",
-        "color": "#A78BFA", "hover": "#8B5CF6",
-        "badge_light": ("#EDE9FE", "#4C1D95"),
-        "badge_dark":  ("#2D1B69", "#A78BFA"),
     },
     "break": {
         "name": "休息 💤", "csv": "休息",
@@ -52,25 +46,23 @@ class ModernLoggerTimer:
     def __init__(self):
         self.root = ctk.CTk()
         self.root.title("🍅 番茄工作計時器")
-        self.root.geometry("420x720")
+        self.root.geometry("420x700")
         self.root.resizable(False, False)
 
         # ── 狀態 ──
         self.filename     = "timer_log.csv"
         self.timer_id     = None
         self.is_running   = False
-        self.current_mode = "work"   # "work" | "study" | "break" | "overtime"
+        self.current_mode = "work"
         self.elapsed_time = 0
 
         # ── 時長設定 ──
         self.work_duration  = 25 * 60
-        self.study_duration = 50 * 60
         self.break_duration = 5 * 60
         self.remaining_time = self.work_duration
 
         # ── 計數 ──
-        self.work_count  = 0
-        self.study_count = 0
+        self.work_count = 0
 
         self.always_on_top = False
 
@@ -114,47 +106,40 @@ class ModernLoggerTimer:
         # ── Row 1: 圓形計時器 ──
         self._build_timer_canvas()
 
-        # ── Row 2: 設定卡（工作 / 讀書 / 休息 分鐘）──
+        # ── Row 2: 設定卡 ──
         settings_card = ctk.CTkFrame(
             self.root, fg_color=("gray90", "gray18"), corner_radius=14)
         settings_card.grid(row=2, column=0, padx=30, pady=(0, 4), sticky="ew")
         inner = ctk.CTkFrame(settings_card, fg_color="transparent")
         inner.pack(pady=8)
 
-        lbl_font   = ("微軟正黑體", 12)
-        entry_kw   = dict(width=38, font=("Segoe UI", 13, "bold"), justify="center",
-                          border_width=0, fg_color=("gray80", "gray28"), corner_radius=8)
+        lbl_font = ("微軟正黑體", 12)
+        entry_kw = dict(width=44, font=("Segoe UI", 13, "bold"), justify="center",
+                        border_width=0, fg_color=("gray80", "gray28"), corner_radius=8)
 
-        ctk.CTkLabel(inner, text="工作", font=lbl_font,
-                     text_color=MODE_CFG["work"]["color"]).pack(side="left", padx=(0, 3))
+        ctk.CTkLabel(inner, text="專注", font=lbl_font,
+                     text_color=MODE_CFG["work"]["color"]).pack(side="left", padx=(0, 4))
         self.work_spinbox = ctk.CTkEntry(inner, **entry_kw)
         self.work_spinbox.insert(0, "25")
         self.work_spinbox.pack(side="left", padx=(0, 2))
-        ctk.CTkLabel(inner, text="分", font=lbl_font).pack(side="left", padx=(0, 8))
-
-        ctk.CTkLabel(inner, text="讀書", font=lbl_font,
-                     text_color=MODE_CFG["study"]["color"]).pack(side="left", padx=(0, 3))
-        self.study_spinbox = ctk.CTkEntry(inner, **entry_kw)
-        self.study_spinbox.insert(0, "50")
-        self.study_spinbox.pack(side="left", padx=(0, 2))
-        ctk.CTkLabel(inner, text="分", font=lbl_font).pack(side="left", padx=(0, 8))
+        ctk.CTkLabel(inner, text="分", font=lbl_font).pack(side="left", padx=(0, 20))
 
         ctk.CTkLabel(inner, text="休息", font=lbl_font,
-                     text_color=MODE_CFG["break"]["color"]).pack(side="left", padx=(0, 3))
+                     text_color=MODE_CFG["break"]["color"]).pack(side="left", padx=(0, 4))
         self.break_spinbox = ctk.CTkEntry(inner, **entry_kw)
         self.break_spinbox.insert(0, "5")
         self.break_spinbox.pack(side="left", padx=(0, 2))
         ctk.CTkLabel(inner, text="分", font=lbl_font).pack(side="left")
 
-        # ── Row 3: 模式分段按鈕 ──
+        # ── Row 3: 模式切換 ──
         self.mode_selector = ctk.CTkSegmentedButton(
             self.root,
-            values=["工作 🔥", "讀書 📚", "休息 💤"],
+            values=["專注 🔥", "休息 💤"],
             command=self._on_mode_selected,
-            font=("微軟正黑體", 13, "bold"),
-            height=38,
+            font=("微軟正黑體", 14, "bold"),
+            height=42,
         )
-        self.mode_selector.set("工作 🔥")
+        self.mode_selector.set("專注 🔥")
         self.mode_selector.grid(row=3, column=0, padx=30, pady=4, sticky="ew")
 
         # ── Row 4: 控制按鈕 ──
@@ -183,7 +168,7 @@ class ModernLoggerTimer:
         # ── Row 5: 計數標籤 ──
         self.count_label = ctk.CTkLabel(
             self.root,
-            text="🍅 工作：0  ｜  📚 讀書：0",
+            text="🍅 今日完成：0 次專注",
             font=("微軟正黑體", 13),
             text_color=("gray45", "gray65"),
         )
@@ -271,7 +256,6 @@ class ModernLoggerTimer:
         self.timer_canvas.itemconfig(self._progress_arc, outline=color)
 
     def _apply_mode_ui(self, mode):
-        """更新徽章、環色、副標題。"""
         cfg = MODE_CFG[mode]
         is_dark = ctk.get_appearance_mode() == "Dark"
         badge_fg, badge_txt = cfg["badge_dark"] if is_dark else cfg["badge_light"]
@@ -290,8 +274,7 @@ class ModernLoggerTimer:
     # 模式切換
     # =========================================================
     def _on_mode_selected(self, value):
-        """分段按鈕點擊回呼。"""
-        mapping = {"工作 🔥": "work", "讀書 📚": "study", "休息 💤": "break"}
+        mapping = {"專注 🔥": "work", "休息 💤": "break"}
         new_mode = mapping.get(value, "work")
         if new_mode == self.current_mode and self.current_mode != "overtime":
             return
@@ -303,15 +286,14 @@ class ModernLoggerTimer:
         self.save_log()
         self._read_settings()
 
-        self.current_mode = new_mode
-        self.elapsed_time = 0
+        self.current_mode   = new_mode
+        self.elapsed_time   = 0
         self.remaining_time = self._get_target_duration() if new_mode != "overtime" else 0
 
         self._set_ring_progress(0)
         self._apply_mode_ui(new_mode)
 
-        seg_map = {"work": "工作 🔥", "study": "讀書 📚",
-                   "break": "休息 💤", "overtime": "休息 💤"}
+        seg_map = {"work": "專注 🔥", "break": "休息 💤", "overtime": "休息 💤"}
         self.mode_selector.set(seg_map[new_mode])
 
         if new_mode == "overtime":
@@ -333,7 +315,6 @@ class ModernLoggerTimer:
             self.btn_pause.configure(state="disabled", fg_color="gray45", text="⏸  暫停")
 
     def _enter_overtime(self):
-        """休息超時：切換超時模式，計時器轉為正數、紅色。"""
         self.current_mode = "overtime"
         self.elapsed_time = 0
         self.is_running   = True
@@ -376,19 +357,15 @@ class ModernLoggerTimer:
     # 設定 & 輔助
     # =========================================================
     def _get_target_duration(self):
-        if self.current_mode == "work":   return self.work_duration
-        if self.current_mode == "study":  return self.study_duration
-        return self.break_duration
+        return self.work_duration if self.current_mode == "work" else self.break_duration
 
     def _read_settings(self):
         try:
             w = int(self.work_spinbox.get())
-            s = int(self.study_spinbox.get())
             b = int(self.break_spinbox.get())
-            if w <= 0 or s <= 0 or b <= 0:
+            if w <= 0 or b <= 0:
                 raise ValueError
             self.work_duration  = w * 60
-            self.study_duration = s * 60
             self.break_duration = b * 60
             return True
         except ValueError:
@@ -402,7 +379,7 @@ class ModernLoggerTimer:
 
     def _update_count_label(self):
         self.count_label.configure(
-            text=f"🍅 工作：{self.work_count}  ｜  📚 讀書：{self.study_count}"
+            text=f"🍅 今日完成：{self.work_count} 次專注"
         )
 
     # =========================================================
@@ -414,7 +391,6 @@ class ModernLoggerTimer:
         self.elapsed_time += 1
 
         if self.current_mode == "overtime":
-            # 超時正數計時，紅色顯示
             self._set_time_display("+" + self.format_time(self.elapsed_time))
         else:
             self.remaining_time -= 1
@@ -428,12 +404,10 @@ class ModernLoggerTimer:
         self.timer_id = self.root.after(1000, self.update_clock)
 
     def _on_session_complete(self):
-        """倒數歸零後的處理。"""
         if self.timer_id:
             self.root.after_cancel(self.timer_id)
         self.is_running = False
 
-        # 音效
         try:
             import winsound
             winsound.Beep(1000, 300)
@@ -441,26 +415,18 @@ class ModernLoggerTimer:
         except Exception:
             pass
 
-        # 計數
         if self.current_mode == "work":
             self.work_count += 1
             self._update_count_label()
-        elif self.current_mode == "study":
-            self.study_count += 1
-            self._update_count_label()
 
-        # 儲存
         self.save_log()
 
         mode_name = MODE_CFG[self.current_mode]["name"]
 
         if self.current_mode == "break":
-            # 休息結束：可選繼續（超時）或切回工作
             answer = messagebox.askokcancel(
                 "休息結束！",
-                f"{mode_name}結束！\n\n"
-                "• 確定 → 切回工作\n"
-                "• 取消 → 繼續休息（自動記錄超時）",
+                f"{mode_name}結束！\n\n• 確定 → 開始專注\n• 取消 → 繼續休息（記錄超時）",
                 icon="info",
             )
             if answer:
@@ -468,7 +434,6 @@ class ModernLoggerTimer:
             else:
                 self._enter_overtime()
         else:
-            # 工作 / 讀書結束：詢問是否休息
             answer = messagebox.askokcancel(
                 "時間到！",
                 f"{mode_name}結束！\n是否開始休息？",
@@ -477,8 +442,7 @@ class ModernLoggerTimer:
             if answer:
                 self._switch_to_mode("break")
             else:
-                # 留在當前模式，重置計時
-                self.elapsed_time  = 0
+                self.elapsed_time   = 0
                 self.remaining_time = self._get_target_duration()
                 self._set_time_display(self.format_time(self.remaining_time))
                 self._set_ring_progress(0)
@@ -514,13 +478,10 @@ class ModernLoggerTimer:
             self.root.after_cancel(self.timer_id)
         self.is_running   = False
         self.elapsed_time = 0
-
-        # 超時重置回到休息模式
         if self.current_mode == "overtime":
             self.current_mode = "break"
             self.mode_selector.set("休息 💤")
             self._apply_mode_ui("break")
-
         self.remaining_time = self._get_target_duration()
         self._set_time_display(self.format_time(self.remaining_time))
         self._set_ring_progress(0)
@@ -554,19 +515,18 @@ class ModernLoggerTimer:
         if not os.path.exists(self.filename):
             return
         today_str = datetime.now().strftime("%Y-%m-%d")
-        wc = sc = 0
+        count = 0
         try:
             with open(self.filename, mode='r', encoding='utf-8-sig') as f:
                 reader = csv.reader(f)
                 next(reader, None)
                 for row in reader:
                     if len(row) >= 3 and row[0].startswith(today_str):
-                        if   row[1] == "工作": wc += 1
-                        elif row[1] == "讀書": sc += 1
+                        if row[1] == "專注":
+                            count += 1
         except Exception:
             pass
-        self.work_count  = wc
-        self.study_count = sc
+        self.work_count = count
         self._update_count_label()
 
     # =========================================================
@@ -600,7 +560,7 @@ class ModernLoggerTimer:
             return
 
         today_str = datetime.now().strftime("%Y-%m-%d")
-        all_acts  = ["工作", "讀書", "休息", "超時休息"]
+        all_acts  = ["專注", "休息", "超時休息"]
         intervals = {a: [] for a in all_acts}
         totals    = {a: 0  for a in all_acts}
         min_hour, max_hour, has_data = 24, 0, False
@@ -612,6 +572,9 @@ class ModernLoggerTimer:
                 for row in reader:
                     if len(row) >= 3 and row[0].startswith(today_str):
                         ts, act, dur_str = row[0], row[1], row[2]
+                        # 舊資料相容：工作/讀書 → 專注
+                        if act in ("工作", "讀書"):
+                            act = "專注"
                         if act not in intervals:
                             continue
                         end_dt   = datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
@@ -635,7 +598,7 @@ class ModernLoggerTimer:
 
         win = ctk.CTkToplevel(self.root)
         win.title(f"今日統計 ({today_str})")
-        win.geometry("820x500")
+        win.geometry("820x460")
         win.grab_set()
         win.focus_force()
 
@@ -649,14 +612,12 @@ class ModernLoggerTimer:
         stats_bg   = "#333333" if is_dark else "#DDDDDD"
 
         COLOR_MAP = {
-            "工作":    "#4CAF50" if not is_dark else "#2E7D32",
-            "讀書":    "#9C27B0" if not is_dark else "#7B1FA2",
+            "專注":    "#4CAF50" if not is_dark else "#2E7D32",
             "休息":    "#2196F3" if not is_dark else "#1565C0",
             "超時休息": "#F44336" if not is_dark else "#B71C1C",
         }
-        EMOJI_MAP = {"工作": "🔥", "讀書": "📚", "休息": "☕", "超時休息": "⚠️"}
+        EMOJI_MAP = {"專注": "🔥", "休息": "☕", "超時休息": "⚠️"}
 
-        # 統計列
         stats_frame = ctk.CTkFrame(win, fg_color=stats_bg, corner_radius=10)
         stats_frame.pack(fill="x", padx=20, pady=(15, 5))
         for act in all_acts:
@@ -666,16 +627,11 @@ class ModernLoggerTimer:
                     text=f"{EMOJI_MAP[act]} {act}：{self.format_time_short(totals[act])}",
                     font=("微軟正黑體", 14, "bold"),
                     text_color=COLOR_MAP[act],
-                ).pack(side="left", padx=14, pady=10)
+                ).pack(side="left", padx=18, pady=10)
 
-        # 甘特圖（4 列）
-        Y_POS = {
-            "工作":    (34, 8),
-            "讀書":    (24, 8),
-            "休息":    (14, 8),
-            "超時休息": (14, 8),   # 與休息同列，顏色不同
-        }
-        fig, ax = plt.subplots(figsize=(10, 3.4), facecolor=bg_color)
+        Y_POS = {"專注": (24, 8), "休息": (14, 8), "超時休息": (14, 8)}
+
+        fig, ax = plt.subplots(figsize=(10, 3), facecolor=bg_color)
         ax.set_facecolor(bg_color)
 
         for act, ivs in intervals.items():
@@ -690,9 +646,9 @@ class ModernLoggerTimer:
         ax.set_xticks(ticks)
         ax.set_xticklabels([f"{int(h):02d}:00" for h in ticks], color=text_color)
         ax.set_xlabel("時間 (24小時制)", color=text_color, fontsize=11)
-        ax.set_ylim(10, 47)
-        ax.set_yticks([38, 28, 18])
-        ax.set_yticklabels(["工作", "讀書", "休息/超時"], color=text_color, fontsize=10)
+        ax.set_ylim(10, 37)
+        ax.set_yticks([28, 18])
+        ax.set_yticklabels(["專注", "休息/超時"], color=text_color, fontsize=10)
         ax.set_title("今日時間分佈", color=text_color, fontsize=12, pad=8)
         for spine in ['top', 'left', 'right']:
             ax.spines[spine].set_color('none')
@@ -737,10 +693,10 @@ class ModernLoggerTimer:
         current_date = ""
         is_dark = ctk.get_appearance_mode() == "Dark"
 
-        # (light_bg, light_text, dark_bg)
         CARD = {
-            "工作":    ("#E8F5E9", "#1B5E20", "#2E7D32"),
-            "讀書":    ("#F3E5F5", "#4A148C", "#6A1B9A"),
+            "專注":    ("#E8F5E9", "#1B5E20", "#2E7D32"),
+            "工作":    ("#E8F5E9", "#1B5E20", "#2E7D32"),   # 舊資料相容
+            "讀書":    ("#E8F5E9", "#1B5E20", "#2E7D32"),   # 舊資料相容
             "休息":    ("#E3F2FD", "#0D47A1", "#1565C0"),
             "超時休息": ("#FFEBEE", "#B71C1C", "#C62828"),
         }
@@ -757,14 +713,17 @@ class ModernLoggerTimer:
                              fg_color=("gray85", "gray25"),
                              corner_radius=6).pack(fill="x", pady=(12, 4))
 
-            colors = CARD.get(activity, ("#F5F5F5", "#212121", "#424242"))
+            colors  = CARD.get(activity, ("#F5F5F5", "#212121", "#424242"))
             card_bg = colors[2] if is_dark else colors[0]
             txt     = "white"   if is_dark else colors[1]
+
+            # 顯示標籤：舊資料工作/讀書 → 顯示為「專注」
+            display_act = "專注" if activity in ("工作", "讀書") else activity
 
             card = ctk.CTkFrame(scroll, fg_color=card_bg, corner_radius=8)
             card.pack(fill="x", pady=2)
             ctk.CTkLabel(card,
-                         text=f"[{time_part}]  {activity}：{duration}",
+                         text=f"[{time_part}]  {display_act}：{duration}",
                          text_color=txt,
                          font=("微軟正黑體", 13)).pack(side="left", padx=12, pady=6)
 
