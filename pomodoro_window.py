@@ -329,11 +329,16 @@ class ModernLoggerTimer:
 
     def _exit_mini_mode(self):
         self._is_mini = False
+        # 解除綁定，防止 geometry 變更時再次觸發 <Unmap>
+        self.root.unbind("<Unmap>")
         self.mini_frame.grid_remove()
         self.main_frame.grid()
         self.root.resizable(True, True)
         self.root.geometry("420x700")
         self.root.resizable(False, False)
+        # 視窗穩定後重新綁定
+        if self.always_on_top:
+            self.root.after(300, lambda: self.root.bind("<Unmap>", self._on_unmap))
 
     # =========================================================
     # 模式切換
