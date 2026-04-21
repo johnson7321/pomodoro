@@ -3,6 +3,7 @@ import tkinter as tk
 from tkinter import messagebox
 import csv
 import os
+import sys
 import threading
 import json
 import ctypes
@@ -529,30 +530,45 @@ class ModernLoggerTimer:
         except Exception as e:
             messagebox.showerror("錯誤", f"無法儲存封鎖清單：{e}")
 
+    def _restart_as_admin(self):
+        """以管理員身分重新啟動程式。"""
+        try:
+            ctypes.windll.shell32.ShellExecuteW(
+                None, "runas", sys.executable, " ".join(sys.argv), None, 1
+            )
+            self.root.destroy()
+        except Exception as e:
+            messagebox.showerror("錯誤", f"無法重新啟動：{e}")
+
     def _apply_hosts_block(self, enable: bool):
         """向 hosts 檔寫入／移除封鎖條目。需要管理員權限。"""
         if not self.blocked_sites:
             return
         if not self._is_admin():
             if enable:
-                messagebox.showwarning(
+                answer = messagebox.askyesno(
                     "需要管理員權限",
-                    "封鎖網站功能需要以「管理員身分」執行此程式。\n"
-                    "請右鍵點擊程式 → 以系統管理員身分執行。",
+                    "封鎖網站功能需要以「管理員身分」執行此程式。\n\n"
+                    "是否現在以管理員身分重新啟動？",
                 )
+                if answer:
+                    self._restart_as_admin()
             return
 
         try:
-            with open(HOSTS_FILE, "r", encoding="utf-8") as f:
-                content = f.read()
+            # hosts 檔案可能是 ANSI/UTF-8，用 errors='ignore' 確保讀取成功
+            try:
+                with open(HOSTS_FILE, "r", encoding="utf-8", errors="ignore") as f:
+                    content = f.read()
+            except Exception:
+                with open(HOSTS_FILE, "r", encoding="cp1252", errors="ignore") as f:
+                    content = f.read()
 
             # 移除舊的封鎖區塊
-            if BLOCK_START in content:
+            if BLOCK_START in content and BLOCK_END in content:
                 before = content[:content.index(BLOCK_START)]
-                after_start = content[content.index(BLOCK_END) + len(BLOCK_END):]
-                content = before.rstrip() + after_start.lstrip("\n")
-                if content and not content.endswith("\n"):
-                    content += "\n"
+                after_end = content[content.index(BLOCK_END) + len(BLOCK_END):]
+                content = before.rstrip("\n") + "\n" + after_end.lstrip("\n")
 
             if enable and self.blocked_sites:
                 lines = [BLOCK_START]
@@ -562,21 +578,24 @@ class ModernLoggerTimer:
                         lines.append(f"127.0.0.1 {site}")
                         lines.append(f"127.0.0.1 www.{site}")
                 lines.append(BLOCK_END)
-                content = content.rstrip("\n") + "\n" + "\n".join(lines) + "\n"
+                if not content.endswith("\n"):
+                    content += "\n"
+                content += "\n".join(lines) + "\n"
 
-            with open(HOSTS_FILE, "w", encoding="utf-8") as f:
+            with open(HOSTS_FILE, "w", encoding="utf-8", newline="\n") as f:
                 f.write(content)
 
             self._sites_active = enable
             self._flush_dns()
+            print(f"[封鎖網站] {'已封鎖' if enable else '已解除'}: {self.blocked_sites}")
 
         except PermissionError:
             messagebox.showwarning(
                 "權限不足",
-                "無法修改 hosts 檔案，請以管理員身分執行此程式。",
+                "無法修改 hosts 檔案。\n請關閉程式，右鍵點擊 → 以系統管理員身分執行。",
             )
         except Exception as e:
-            messagebox.showerror("封鎖錯誤", str(e))
+            messagebox.showerror("封鎖錯誤", f"修改 hosts 失敗：{e}")
 
     def _flush_dns(self):
         try:
@@ -602,10 +621,18 @@ class ModernLoggerTimer:
         ).pack(pady=(18, 4))
 
         is_admin = self._is_admin()
-        status_text = "✅ 已取得管理員權限" if is_admin else "⚠️ 未以管理員執行，封鎖功能將無法生效"
-        status_color = "#2CC985" if is_admin else "#E5A124"
-        ctk.CTkLabel(win, text=status_text, font=("微軟正黑體", 11),
-                     text_color=status_color).pack(pady=(0, 8))
+        if is_admin:
+            ctk.CTkLabel(win, text="✅ 已取得管理員權限", font=("微軟正黑體", 11),
+                         text_color="#2CC985").pack(pady=(0, 4))
+        else:
+            ctk.CTkLabel(win, text="⚠️ 未以管理員執行，封鎖功能無法生效",
+                         font=("微軟正黑體", 11), text_color="#E5A124").pack(pady=(0, 2))
+            ctk.CTkButton(
+                win, text="🔑 以管理員身分重新啟動",
+                font=("微軟正黑體", 12, "bold"), height=30, corner_radius=8,
+                fg_color="#E5A124", hover_color="#C47E00", text_color="white",
+                command=self._restart_as_admin,
+            ).pack(pady=(0, 6))
 
         # 網站清單
         list_frame = ctk.CTkScrollableFrame(win, width=330, height=240)
