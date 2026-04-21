@@ -4,6 +4,9 @@ from tkinter import messagebox
 import csv
 import os
 import threading
+import json
+import ctypes
+import subprocess
 from datetime import datetime, timedelta
 import math
 
@@ -41,12 +44,17 @@ MODE_CFG = {
 DANGER_COLOR = "#E05C5C"
 PAUSE_COLOR  = "#E5A124"
 
+HOSTS_FILE  = r"C:\Windows\System32\drivers\etc\hosts"
+BLOCK_START = "# ===POMODORO_BLOCK_START==="
+BLOCK_END   = "# ===POMODORO_BLOCK_END==="
+BLOCKED_SITES_FILE = "blocked_sites.json"
+
 
 class ModernLoggerTimer:
     def __init__(self):
         self.root = ctk.CTk()
         self.root.title("🍅 番茄工作計時器")
-        self.root.geometry("420x700")
+        self.root.geometry("420x740")
         self.root.resizable(False, False)
 
         self.filename     = "timer_log.csv"
@@ -62,6 +70,10 @@ class ModernLoggerTimer:
         self.work_count    = 0
         self.always_on_top = False
         self._is_mini      = False
+
+        self.blocked_sites  = []
+        self._sites_active  = False
+        self._load_blocked_sites()
 
         # Root only needs one cell
         self.root.grid_columnconfigure(0, weight=1)
@@ -82,7 +94,7 @@ class ModernLoggerTimer:
         self.main_frame = ctk.CTkFrame(self.root, fg_color="transparent")
         self.main_frame.grid(row=0, column=0, sticky="nsew")
         self.main_frame.grid_columnconfigure(0, weight=1)
-        self.main_frame.grid_rowconfigure(list(range(10)), weight=1)
+        self.main_frame.grid_rowconfigure(list(range(11)), weight=1)
 
         mf = self.main_frame   # shorthand
 
@@ -208,11 +220,23 @@ class ModernLoggerTimer:
         )
         self.btn_list.grid(row=8, column=0, padx=30, pady=(0, 4), sticky="ew")
 
-        # ── Row 9: 底部路徑 ──
+        # ── Row 9: 封鎖網站按鈕 ──
+        self.btn_block = ctk.CTkButton(
+            mf, text="🚫  封鎖網站設定",
+            command=self.open_blocked_sites_manager,
+            font=("微軟正黑體", 13), height=36, corner_radius=10,
+            fg_color="transparent", border_width=1,
+            border_color=("gray70", "gray40"),
+            text_color=("gray20", "gray80"),
+            hover_color=("gray88", "gray22"),
+        )
+        self.btn_block.grid(row=9, column=0, padx=30, pady=(0, 4), sticky="ew")
+
+        # ── Row 10: 底部路徑 ──
         ctk.CTkLabel(mf, text=f"紀錄檔：{self.filename}",
                      text_color=("gray60", "gray50"),
                      font=("Segoe UI", 10),
-                     ).grid(row=9, column=0, pady=(0, 12))
+                     ).grid(row=10, column=0, pady=(0, 12))
 
     def _build_mini_ui(self):
         """小視窗懸浮元件（僅 pin 模式下縮小時顯示）。"""
@@ -334,7 +358,7 @@ class ModernLoggerTimer:
         self.mini_frame.grid_remove()
         self.main_frame.grid()
         self.root.resizable(True, True)
-        self.root.geometry("420x700")
+        self.root.geometry("420x740")
         self.root.resizable(False, False)
         # 視窗穩定後重新綁定
         if self.always_on_top:
@@ -355,6 +379,12 @@ class ModernLoggerTimer:
             self.root.after_cancel(self.timer_id)
         self.save_log()
         self._read_settings()
+
+        # 切換模式時更新網站封鎖
+        if new_mode == "work":
+            self._apply_hosts_block(True)
+        else:
+            self._apply_hosts_block(False)
 
         self.current_mode   = new_mode
         self.elapsed_time   = 0
@@ -476,6 +506,182 @@ class ModernLoggerTimer:
         threading.Thread(target=_sound, daemon=True).start()
 
     # =========================================================
+    # 封鎖網站
+    # =========================================================
+    def _is_admin(self):
+        try:
+            return ctypes.windll.shell32.IsUserAnAdmin()
+        except Exception:
+            return False
+
+    def _load_blocked_sites(self):
+        try:
+            if os.path.exists(BLOCKED_SITES_FILE):
+                with open(BLOCKED_SITES_FILE, "r", encoding="utf-8") as f:
+                    self.blocked_sites = json.load(f)
+        except Exception:
+            self.blocked_sites = []
+
+    def _save_blocked_sites(self):
+        try:
+            with open(BLOCKED_SITES_FILE, "w", encoding="utf-8") as f:
+                json.dump(self.blocked_sites, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            messagebox.showerror("錯誤", f"無法儲存封鎖清單：{e}")
+
+    def _apply_hosts_block(self, enable: bool):
+        """向 hosts 檔寫入／移除封鎖條目。需要管理員權限。"""
+        if not self.blocked_sites:
+            return
+        if not self._is_admin():
+            if enable:
+                messagebox.showwarning(
+                    "需要管理員權限",
+                    "封鎖網站功能需要以「管理員身分」執行此程式。\n"
+                    "請右鍵點擊程式 → 以系統管理員身分執行。",
+                )
+            return
+
+        try:
+            with open(HOSTS_FILE, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            # 移除舊的封鎖區塊
+            if BLOCK_START in content:
+                before = content[:content.index(BLOCK_START)]
+                after_start = content[content.index(BLOCK_END) + len(BLOCK_END):]
+                content = before.rstrip() + after_start.lstrip("\n")
+                if content and not content.endswith("\n"):
+                    content += "\n"
+
+            if enable and self.blocked_sites:
+                lines = [BLOCK_START]
+                for site in self.blocked_sites:
+                    site = site.strip()
+                    if site:
+                        lines.append(f"127.0.0.1 {site}")
+                        lines.append(f"127.0.0.1 www.{site}")
+                lines.append(BLOCK_END)
+                content = content.rstrip("\n") + "\n" + "\n".join(lines) + "\n"
+
+            with open(HOSTS_FILE, "w", encoding="utf-8") as f:
+                f.write(content)
+
+            self._sites_active = enable
+            self._flush_dns()
+
+        except PermissionError:
+            messagebox.showwarning(
+                "權限不足",
+                "無法修改 hosts 檔案，請以管理員身分執行此程式。",
+            )
+        except Exception as e:
+            messagebox.showerror("封鎖錯誤", str(e))
+
+    def _flush_dns(self):
+        try:
+            subprocess.run(
+                ["ipconfig", "/flushdns"],
+                capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW,
+            )
+        except Exception:
+            pass
+
+    def open_blocked_sites_manager(self):
+        """開啟封鎖網站管理視窗。"""
+        win = ctk.CTkToplevel(self.root)
+        win.title("🚫 封鎖網站設定")
+        win.geometry("380x480")
+        win.grab_set()
+        win.focus_force()
+        win.resizable(False, False)
+
+        ctk.CTkLabel(
+            win, text="專注時封鎖的網站",
+            font=("微軟正黑體", 17, "bold"),
+        ).pack(pady=(18, 4))
+
+        is_admin = self._is_admin()
+        status_text = "✅ 已取得管理員權限" if is_admin else "⚠️ 未以管理員執行，封鎖功能將無法生效"
+        status_color = "#2CC985" if is_admin else "#E5A124"
+        ctk.CTkLabel(win, text=status_text, font=("微軟正黑體", 11),
+                     text_color=status_color).pack(pady=(0, 8))
+
+        # 網站清單
+        list_frame = ctk.CTkScrollableFrame(win, width=330, height=240)
+        list_frame.pack(padx=20, pady=(0, 8), fill="x")
+
+        site_vars = []
+
+        def refresh_list():
+            for w in list_frame.winfo_children():
+                w.destroy()
+            site_vars.clear()
+            for i, site in enumerate(self.blocked_sites):
+                row = ctk.CTkFrame(list_frame, fg_color="transparent")
+                row.pack(fill="x", pady=2)
+                ctk.CTkLabel(row, text=site, font=("Segoe UI", 13), anchor="w").pack(
+                    side="left", padx=8, expand=True, fill="x")
+                ctk.CTkButton(
+                    row, text="✕", width=30, height=26,
+                    fg_color=DANGER_COLOR, hover_color="#B84040",
+                    font=("Segoe UI", 12, "bold"),
+                    command=lambda s=site: remove_site(s),
+                ).pack(side="right", padx=4)
+
+        def remove_site(site):
+            if site in self.blocked_sites:
+                self.blocked_sites.remove(site)
+                self._save_blocked_sites()
+                refresh_list()
+                # 若目前正在封鎖中，更新 hosts
+                if self._sites_active:
+                    self._apply_hosts_block(True)
+
+        # 新增區域
+        add_frame = ctk.CTkFrame(win, fg_color="transparent")
+        add_frame.pack(fill="x", padx=20, pady=4)
+
+        entry = ctk.CTkEntry(
+            add_frame, placeholder_text="輸入網站（如 youtube.com）",
+            font=("Segoe UI", 13), height=36, corner_radius=10,
+        )
+        entry.pack(side="left", expand=True, fill="x", padx=(0, 6))
+
+        def add_site():
+            site = entry.get().strip().lower()
+            site = site.replace("https://", "").replace("http://", "").replace("www.", "").rstrip("/")
+            if not site:
+                return
+            if site in self.blocked_sites:
+                messagebox.showinfo("已存在", f"{site} 已在清單中", parent=win)
+                return
+            self.blocked_sites.append(site)
+            self._save_blocked_sites()
+            entry.delete(0, "end")
+            refresh_list()
+            if self._sites_active:
+                self._apply_hosts_block(True)
+
+        entry.bind("<Return>", lambda e: add_site())
+
+        ctk.CTkButton(
+            add_frame, text="新增", width=60, height=36,
+            corner_radius=10, font=("微軟正黑體", 13),
+            command=add_site,
+        ).pack(side="left")
+
+        # 底部說明
+        ctk.CTkLabel(
+            win,
+            text="網站將在「專注」開始時封鎖，\n切換到休息或停止計時時自動解除。",
+            font=("微軟正黑體", 11),
+            text_color=("gray50", "gray60"),
+        ).pack(pady=(8, 16))
+
+        refresh_list()
+
+    # =========================================================
     # 計時核心
     # =========================================================
     def update_clock(self):
@@ -546,6 +752,9 @@ class ModernLoggerTimer:
                     return
                 self.remaining_time = self._get_target_duration()
                 self._set_time_display(self.format_time(self.remaining_time))
+            # 開始計時時，若為專注模式則封鎖網站
+            if self.current_mode == "work" and not self._sites_active:
+                self._apply_hosts_block(True)
             self.is_running = True
             self.btn_start.configure(state="disabled", fg_color="gray45")
             self.btn_pause.configure(state="normal", fg_color=PAUSE_COLOR, text="⏸  暫停")
@@ -566,6 +775,7 @@ class ModernLoggerTimer:
             self.root.after_cancel(self.timer_id)
         self.is_running   = False
         self.elapsed_time = 0
+        self._apply_hosts_block(False)
         if self.current_mode == "overtime":
             self.current_mode = "break"
             self.mode_selector.set("休息 💤")
@@ -818,6 +1028,8 @@ class ModernLoggerTimer:
     def on_close(self):
         if self.elapsed_time > 0:
             self.save_log()
+        # 關閉時確保解除封鎖
+        self._apply_hosts_block(False)
         self.root.destroy()
         plt.close('all')
 
