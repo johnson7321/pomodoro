@@ -3,42 +3,57 @@ setlocal EnableDelayedExpansion
 title Pomodoro v2 - Build and Push
 
 cd /d "%~dp0"
-echo.
-echo === [1/4] Activating venv ===
-if not exist "venv\Scripts\activate.bat" (
-    echo [ERROR] venv not found at venv\Scripts\activate.bat
-    echo Please create the virtual env first.
-    goto :end
-)
-call "venv\Scripts\activate.bat"
-if errorlevel 1 (
-    echo [ERROR] Failed to activate venv.
+
+REM Use venv Python directly (avoid relying on activate.bat side-effects)
+set PYBIN=venv\Scripts\python.exe
+set PYINST=venv\Scripts\pyinstaller.exe
+
+if not exist "%PYBIN%" (
+    echo [ERROR] Cannot find %PYBIN%
     goto :end
 )
 
-echo.
-echo === [2/4] Checking PyInstaller ===
-python -m pip show pyinstaller >NUL 2>&1
+echo === [1/5] Stopping any running pomodoro_window.exe ===
+taskkill /F /IM pomodoro_window.exe >NUL 2>&1
 if errorlevel 1 (
-    echo PyInstaller not found, installing...
-    python -m pip install pyinstaller
-    if errorlevel 1 (
-        echo [ERROR] pip install failed.
-        goto :end
-    )
+    echo No running instance, skipping.
+) else (
+    echo Killed running instance.
 )
-
 echo.
-echo === [3/4] Running PyInstaller ===
-python -m PyInstaller pomodoro_window.spec --noconfirm
+
+echo === [2/5] Cleaning old dist/build ===
+if exist "dist\pomodoro_window.exe" (
+    del /f /q "dist\pomodoro_window.exe" >NUL 2>&1
+)
+if exist "build\pomodoro_window" (
+    rmdir /s /q "build\pomodoro_window" >NUL 2>&1
+)
+echo Cleaned.
+echo.
+
+echo === [3/5] Verifying customtkinter in venv ===
+"%PYBIN%" -c "import customtkinter, os; p=os.path.dirname(customtkinter.__file__); print('customtkinter dir:', p); print('is package:', os.path.exists(os.path.join(p, '__init__.py')))"
 if errorlevel 1 (
-    echo [ERROR] PyInstaller failed. Check messages above.
+    echo [ERROR] customtkinter not importable in venv. Run: "%PYBIN%" -m pip install customtkinter
+    goto :end
+)
+echo.
+
+echo === [4/5] Running PyInstaller with venv python ===
+"%PYBIN%" -m PyInstaller pomodoro_window.spec --noconfirm --clean
+if errorlevel 1 (
+    echo [ERROR] PyInstaller failed.
     goto :end
 )
 echo Build OK -^> dist\pomodoro_window.exe
-
 echo.
-echo === [4/4] Git commit + push ===
+
+echo === [5/5] Git commit + push ===
+if exist ".git\index.lock" (
+    echo Removing stale .git\index.lock
+    del /f /q ".git\index.lock" >NUL 2>&1
+)
 git add -A
 git commit -m "Refactor v2.0: modular structure + glassmorphism UI"
 if errorlevel 1 (
@@ -48,8 +63,8 @@ git push origin master
 if errorlevel 1 (
     echo [WARN] git push failed. Run "git push origin master" manually.
 )
-
 echo.
+
 echo === DONE ===
 
 :end
