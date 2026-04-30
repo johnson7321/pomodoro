@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(venv/Scripts/python -m PyInstaller pomodoro_window.spec --clean)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(venv/Scripts/python -c \"import ast; ast.parse\\(open\\('pomodoro_window.py'\\).read\\(\\)\\); print\\('Syntax OK'\\)\")",
+      "Bash(venv/Scripts/python -c \"import ast; ast.parse\\(open\\('pomodoro_window.py', encoding='utf-8'\\).read\\(\\)\\); print\\('Syntax OK'\\)\")",
+      "Bash(gh pr create --title '改善番茄鐘：UI 重設計、新功能與錯誤修復' --body ':*)",
+      "Bash(where.exe gh:*)",
+      "Read(//c/Program Files/**)",
+      "Read(//c/Users/User/AppData/Local/Programs/**)",
+      "Bash(powershell.exe -Command \"Get-Command gh -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source\")",
+      "Bash('D:/Program Files/GitHub CLI/gh.exe' pr create --title '改善番茄鐘：UI 重設計、新功能與錯誤修復' --body ':*)",
+      "Bash(\"D:/Program Files/GitHub CLI/gh.exe\" auth status)",
+      "Bash(venv/Scripts/python -c \"import ast; ast.parse\\(open\\('pomodoro_window.py', encoding='utf-8'\\).read\\(\\)\\); print\\('syntax OK'\\)\")",
+      "Bash(venv/Scripts/python -m PyInstaller pomodoro_window.spec --noconfirm)"
+    ]
+  }
+}

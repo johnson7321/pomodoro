@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Pomodoro App (Dev)",
+      "runtimeExecutable": "venv/Scripts/python",
+      "runtimeArgs": ["pomodoro_window.py"],
+      "port": null
+    },
+    {
+      "name": "Pomodoro App (No Console)",
+      "runtimeExecutable": "venv/Scripts/pythonw",
+      "runtimeArgs": ["pomodoro_window.py"],
+      "port": null
+    }
+  ]
+}
