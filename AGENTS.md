@@ -65,8 +65,8 @@ CSV 格式：`utf-8-sig`，欄位 `時間戳記,活動類型,持續時間`。
     venv\Scripts\python.exe -m PyInstaller pomodoro_window.spec --noconfirm --clean
 
 `build_and_push.bat` 封裝了完整流程：taskkill 舊的 `pomodoro_window.exe` → 清 `dist/`、`build/` →
-PyInstaller → commit + push。可傳入 commit 訊息：`build_and_push.bat "訊息"`。它會 push `main`
-並把 `master` 指到同一個 commit（這兩條分支過去曾分岔，別再讓它們分開）。
+PyInstaller → commit + push。可傳入 commit 訊息：`build_and_push.bat "訊息"`。只推 `main`
+（`master` 分支已刪除，本專案只有 `main` 一條分支）。
 
 ## 慣例
 

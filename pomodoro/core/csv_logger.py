@@ -12,12 +12,27 @@ from ..config import LOG_FILE, LOGICAL_DAY_RESET_HOUR, WORK_ALIASES
 HEADER = ("時間戳記", "活動類型", "持續時間")
 
 
+def logical_date_of(moment: datetime) -> str:
+    """某個實體時間點屬於哪一個邏輯日（凌晨 4 點換日），回傳 YYYY-MM-DD。
+
+    凌晨 0:00~3:59 的時間點算「前一天」。
+    """
+    if moment.hour < LOGICAL_DAY_RESET_HOUR:
+        return (moment - timedelta(days=1)).strftime("%Y-%m-%d")
+    return moment.strftime("%Y-%m-%d")
+
+
 def get_logical_date(now: datetime | None = None) -> str:
-    """凌晨 4 點以前算前一天，回傳 YYYY-MM-DD。"""
-    now = now or datetime.now()
-    if now.hour < LOGICAL_DAY_RESET_HOUR:
-        return (now - timedelta(days=1)).strftime("%Y-%m-%d")
-    return now.strftime("%Y-%m-%d")
+    """現在屬於哪一個邏輯日，回傳 YYYY-MM-DD。"""
+    return logical_date_of(now or datetime.now())
+
+
+def parse_timestamp(ts: str) -> datetime | None:
+    """解析紀錄的時間戳記（YYYY-MM-DD HH:MM:SS）；格式不符回 None。"""
+    try:
+        return datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        return None
 
 
 def format_duration(seconds: int) -> str:
@@ -82,13 +97,14 @@ def read_all(filename: str = LOG_FILE) -> List[List[str]]:
 
 
 def count_today_focus(filename: str = LOG_FILE) -> int:
-    """今天（邏輯日）已完成的專注次數。"""
+    """本邏輯日（凌晨 4 點換日）已完成的專注次數。"""
     today = get_logical_date()
-    rows = read_all(filename)
-    return sum(
-        1 for r in rows
-        if r[0].startswith(today) and r[1] in WORK_ALIASES
-    )
+    count = 0
+    for r in read_all(filename):
+        moment = parse_timestamp(r[0])
+        if moment and r[1] in WORK_ALIASES and logical_date_of(moment) == today:
+            count += 1
+    return count
 
 
 def normalize_activity(activity: str) -> str:

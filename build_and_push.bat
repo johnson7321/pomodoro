@@ -66,12 +66,6 @@ git push origin main
 if errorlevel 1 (
     echo [WARN] git push failed. Run "git push origin main" manually.
 )
-REM Keep master on the exact same commit so main/master never diverge again
-git branch -f master main
-git push origin master
-if errorlevel 1 (
-    echo [WARN] could not sync master. Run "git push origin master" manually.
-)
 echo.
 
 echo === DONE ===

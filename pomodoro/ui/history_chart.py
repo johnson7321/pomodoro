@@ -47,7 +47,9 @@ def open_history_chart(parent) -> None:
 
     for r in rows:
         ts, act, dur_str = r[0], CL.normalize_activity(r[1]), r[2]
-        if not ts.startswith(today):
+        end_dt = CL.parse_timestamp(ts)
+        # 以紀錄的時間戳記（結束時間）判定邏輯日：凌晨 0~3 點算前一天
+        if end_dt is None or CL.logical_date_of(end_dt) != today:
             continue
         if act in T.WORK_ACTIVITIES:
             bucket = work_min
@@ -55,15 +57,10 @@ def open_history_chart(parent) -> None:
             bucket = break_min
         else:
             continue
-        try:
-            end_dt = datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
-        except ValueError:
-            continue
         sec = CL.parse_duration(dur_str)
         if sec <= 0:
             continue
-        start_dt = end_dt - timedelta(seconds=sec)
-        _fill_hour_buckets(start_dt, end_dt, bucket)
+        _fill_hour_buckets(end_dt - timedelta(seconds=sec), end_dt, bucket)
         totals[act] += sec
         has_data = True
 
