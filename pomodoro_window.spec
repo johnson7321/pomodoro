@@ -1,16 +1,48 @@
 # -*- mode: python ; coding: utf-8 -*-
-from PyInstaller.utils.hooks import collect_all
+from PyInstaller.utils.hooks import collect_all, collect_submodules
 
 datas = []
 binaries = []
 hiddenimports = []
-tmp_ret = collect_all('customtkinter')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
+# Pull in customtkinter completely (data, binaries, submodules)
+for pkg in ('customtkinter',):
+    d, b, h = collect_all(pkg)
+    datas += d
+    binaries += b
+    hiddenimports += h
+    hiddenimports += collect_submodules(pkg)
+
+# darkdetect is used internally by customtkinter for "System" mode
+hiddenimports += collect_submodules('darkdetect')
+
+# Also matplotlib backends used by our charts
+hiddenimports += [
+    'matplotlib.backends.backend_tkagg',
+    'matplotlib.backends._backend_tk',
+]
+
+# Our own package
+hiddenimports += [
+    'pomodoro',
+    'pomodoro.config',
+    'pomodoro.theme',
+    'pomodoro.core',
+    'pomodoro.core.timer_engine',
+    'pomodoro.core.csv_logger',
+    'pomodoro.core.hosts_blocker',
+    'pomodoro.core.win11_effects',
+    'pomodoro.ui',
+    'pomodoro.ui.widgets',
+    'pomodoro.ui.main_window',
+    'pomodoro.ui.history_chart',
+    'pomodoro.ui.history_list',
+    'pomodoro.ui.blocked_sites_window',
+]
 
 a = Analysis(
-    ['pomodoro_window.py'],
-    pathex=[],
+    ['main.py'],
+    pathex=['.'],
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
