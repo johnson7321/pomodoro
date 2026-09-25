@@ -18,7 +18,7 @@ v2.0 已把原本的單檔 `pomodoro_window.py` 拆成 `pomodoro/` 套件，分�
 - `pomodoro/ui/` — customtkinter 畫面
   - `main_window.py` 主視窗，最大的檔，把 core 三者串起來
   - `widgets.py` 自訂元件：GlassCard / PillButton / GhostButton / StatusBadge / GlowRing / MinutesEntry
-  - `history_chart.py`、`history_list.py`、`blocked_sites_window.py` 三個子視窗
+  - `history_chart.py`、`blocked_sites_window.py` 兩個子視窗
 
 ## 入口
 
@@ -30,8 +30,8 @@ v2.0 已把原本的單檔 `pomodoro_window.py` 拆成 `pomodoro/` 套件，分�
 
 UI 用 `root.after(1000, ...)` 每秒驅動 `TimerEngine.tick()`；engine 只呼叫 `on_tick` /
 `on_complete`，畫面更新與寫檔都在 `main_window` 裡。一個段落結束時 `_save_current()` 依
-`MODE_CFG[_mode_key()]["csv"]` 寫一列進 `timer_log.csv`。`history_chart` 與 `history_list`
-都從同一份 CSV 讀，沒有第二個資料來源。
+`MODE_CFG[_mode_key()]["csv"]` 寫一列進 `timer_log.csv`。`history_chart`
+從同一份 CSV 讀，沒有第二個資料來源。
 
 CSV 格式：`utf-8-sig`，欄位 `時間戳記,活動類型,持續時間`。
 時間戳記是**結束時間**；持續時間為 `MM:SS` 或 `HH:MM:SS`，超時段前面加 `+`。
@@ -50,7 +50,7 @@ CSV 格式：`utf-8-sig`，欄位 `時間戳記,活動類型,持續時間`。
 4. **不要跑 `pip install -r requirements.txt`。** 那是 233 包、UTF-16LE 編碼的全環境 freeze，
    跟這個 venv（20 包）無關，連 `accelerate` 都沒裝。實際第三方依賴只有
    `customtkinter`、`matplotlib`、`numpy`。
-5. 改 `MODE_CFG` 的鍵名時，別漏掉 `history_chart.py` 與 `history_list.py` 裡「活動名稱 → 顏色」的對應。
+5. 改 `MODE_CFG` 的鍵名時，別漏掉 `history_chart.py` 裡「活動名稱 → 顏色」的對應。
 6. 封鎖網站要管理員權限：`hosts_blocker.apply_block()` 非管理員直接回 False，由 UI 決定是否提示重啟；
    它會改 `C:\Windows\System32\drivers\etc\hosts` 並執行 `ipconfig /flushdns`。
 

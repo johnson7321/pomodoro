@@ -24,7 +24,6 @@ from ..core import win11_effects as W11
 from ..core.timer_engine import TimerEngine
 from .blocked_sites_window import open_blocked_sites_window
 from .history_chart import open_history_chart
-from .history_list import open_history_list
 from .widgets import GhostButton, GlassCard, GlowRing, MinutesEntry, PillButton, StatusBadge
 
 
@@ -205,14 +204,9 @@ class PomodoroApp:
         ).grid(row=0, column=0, sticky="ew", pady=(0, 6))
 
         GhostButton(
-            action_col, text="📅  詳細紀錄列表",
-            command=lambda: open_history_list(self.root),
-        ).grid(row=1, column=0, sticky="ew", pady=(0, 6))
-
-        GhostButton(
             action_col, text="🚫  封鎖網站設定",
             command=self._open_blocked,
-        ).grid(row=2, column=0, sticky="ew", pady=(0, 6))
+        ).grid(row=1, column=0, sticky="ew", pady=(0, 6))
 
         # ── 底部 ──
         ctk.CTkLabel(

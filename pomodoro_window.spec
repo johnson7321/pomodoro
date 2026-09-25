@@ -36,7 +36,6 @@ hiddenimports += [
     'pomodoro.ui.widgets',
     'pomodoro.ui.main_window',
     'pomodoro.ui.history_chart',
-    'pomodoro.ui.history_list',
     'pomodoro.ui.blocked_sites_window',
 ]
 
