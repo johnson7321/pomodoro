@@ -27,6 +27,18 @@ def get_logical_date(now: datetime | None = None) -> str:
     return logical_date_of(now or datetime.now())
 
 
+def logical_day_window(logical_date: str) -> tuple[datetime, datetime]:
+    """邏輯日的實際起迄 [開始, 結束)，例如 "2026-01-10" → [01-10 04:00, 01-11 04:00)。"""
+    start = datetime.strptime(logical_date, "%Y-%m-%d") + timedelta(hours=LOGICAL_DAY_RESET_HOUR)
+    return start, start + timedelta(days=1)
+
+
+def format_logical_day_window(logical_date: str) -> str:
+    """邏輯日的可讀區間，例如「01-10 04:00 → 01-11 04:00」。"""
+    start, end = logical_day_window(logical_date)
+    return f"{start:%m-%d %H:%M} → {end:%m-%d %H:%M}"
+
+
 def parse_timestamp(ts: str) -> datetime | None:
     """解析紀錄的時間戳記（YYYY-MM-DD HH:MM:SS）；格式不符回 None。"""
     try:

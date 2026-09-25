@@ -182,8 +182,8 @@ class PomodoroApp:
 
         # ── 計數 ──
         self.count_label = ctk.CTkLabel(
-            self.main, text="🍅 今日完成：0 次專注",
-            font=(T.FONT_FAMILY_UI, 13),
+            self.main, text="🍅 完成 0 次專注",
+            font=(T.FONT_FAMILY_UI, 12),
             text_color=T.TEXT_SECONDARY,
         )
         self.count_label.grid(row=5, column=0, pady=(6, 4))
@@ -199,7 +199,7 @@ class PomodoroApp:
         action_col.grid_columnconfigure(0, weight=1)
 
         GhostButton(
-            action_col, text="📊  今日時間軸",
+            action_col, text="📊  時間統計",
             command=lambda: open_history_chart(self.root),
         ).grid(row=0, column=0, sticky="ew", pady=(0, 6))
 
@@ -500,7 +500,9 @@ class PomodoroApp:
         return CL.format_duration(self.engine.remaining)
 
     def _update_count_label(self) -> None:
-        self.count_label.configure(text=f"🍅 今日完成：{self.work_count} 次專注")
+        # 顯示邏輯日的實際區間，而不是含糊的「今日」（凌晨 0~4 點算前一天）
+        span = CL.format_logical_day_window(CL.get_logical_date())
+        self.count_label.configure(text=f"🍅 {span}　完成 {self.work_count} 次專注")
 
     # ======================================================================
     # 鬧鐘

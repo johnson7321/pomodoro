@@ -37,6 +37,20 @@ CSV 格式：`utf-8-sig`，欄位 `時間戳記,活動類型,持續時間`。
 時間戳記是**結束時間**；持續時間為 `MM:SS` 或 `HH:MM:SS`，超時段前面加 `+`。
 活動類型是 專注 / 超時專注 / 休息 / 超時休息；舊檔可能有 工作 / 讀書，`normalize_activity()` 會正規化掉。
 
+### 邏輯日（凌晨 4 點換日）
+
+一天不是日曆日，而是**邏輯日**：`[當天 04:00, 隔天 04:00)`，由 `config.LOGICAL_DAY_RESET_HOUR`
+決定。所有「算哪一天」的判斷都走 `csv_logger`：
+
+- `logical_date_of(moment)`：某個時間點屬於哪個邏輯日（00:00~03:59 算**前一天**）。
+- `get_logical_date()`：現在屬於哪個邏輯日。
+- `logical_day_window(date)` / `format_logical_day_window(date)`：邏輯日的起迄時間與顯示字串
+  （例如 `01-10 04:00 → 01-11 04:00`）。UI 一律顯示這個區間，不要寫含糊的「今日」。
+
+`history_chart` 把每筆紀錄**裁切**進 `[04:00, 隔天 04:00)` 之後才分桶，所以跨 04:00 的紀錄
+會依實際時間切給前後兩個邏輯日（各看見自己那一段）。X 軸也照邏輯日順序排，從 04:00 走到
+隔日 03:00，不是時鐘的 00~23。
+
 ## 容易踩到的坑
 
 1. **`MODE_CFG` 沒有 `"overtime"` 這個鍵。** `engine.mode` 的超時態只有 `"overtime"` 一個值，要先用
@@ -53,6 +67,9 @@ CSV 格式：`utf-8-sig`，欄位 `時間戳記,活動類型,持續時間`。
 5. 改 `MODE_CFG` 的鍵名時，別漏掉 `history_chart.py` 裡「活動名稱 → 顏色」的對應。
 6. 封鎖網站要管理員權限：`hosts_blocker.apply_block()` 非管理員直接回 False，由 UI 決定是否提示重啟；
    它會改 `C:\Windows\System32\drivers\etc\hosts` 並執行 `ipconfig /flushdns`。
+7. **日期歸屬一律走邏輯日。** 時間戳記存的是實體時間（寫入時 `datetime.now()`），但「算哪一天」
+   必須用 `logical_date_of()`。曾經用 `ts.startswith(get_logical_date())` 比對，結果 00:00~03:59
+   的紀錄被印上當天日期、卻不屬於任何邏輯日 —— 圖表和「完成 N 次」同時看不到它。
 
 ## 指令
 
