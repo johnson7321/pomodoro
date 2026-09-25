@@ -65,7 +65,19 @@ MODE_CFG = {
         "badge_light": ("#D0EBFF", "#0B4F87"),
         "badge_dark": ("#0B2540", "#A5D8FF"),
     },
-    "overtime": {
+    # 時間到之後使用者選擇「繼續」→ 計時改為往上累加
+    "overtime_work": {
+        "name": "超時專注",
+        "icon": "⏱",
+        "csv": "超時專注",
+        "color": "#FF922B",                # 工作橙
+        "color_soft": "#FFC078",
+        "hover": "#E8590C",
+        "glow": "#FFA94D",
+        "badge_light": ("#FFE8CC", "#8A3D00"),
+        "badge_dark": ("#3D2200", "#FFC078"),
+    },
+    "overtime_break": {
         "name": "超時休息",
         "icon": "⚠️",
         "csv": "超時休息",
@@ -77,6 +89,13 @@ MODE_CFG = {
         "badge_dark": ("#3D2A00", "#FFD43B"),
     },
 }
+
+# 超時狀態（engine.mode == "overtime"）依 engine.overtime_kind 對應的設定鍵
+OVERTIME_KEYS = {"work": "overtime_work", "break": "overtime_break"}
+
+# 圖表／列表中代表「工作」與「休息」的 CSV 活動名稱
+WORK_ACTIVITIES = ("專注", "超時專注")
+BREAK_ACTIVITIES = ("休息", "超時休息")
 
 # 中性 / 動作色
 DANGER = "#E03131"

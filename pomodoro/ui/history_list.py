@@ -11,11 +11,12 @@ from ..core import csv_logger as CL
 from .widgets import GlassCard
 
 
-# 對應三類活動的條目顏色（pill 樣式）
+# 對應各類活動的條目顏色（pill 樣式）
 PILL_COLORS = {
     "專注": T.MODE_CFG["work"]["color"],
     "休息": T.MODE_CFG["break"]["color"],
-    "超時休息": T.MODE_CFG["overtime"]["color"],
+    "超時專注": T.MODE_CFG["overtime_work"]["color"],
+    "超時休息": T.MODE_CFG["overtime_break"]["color"],
 }
 
 

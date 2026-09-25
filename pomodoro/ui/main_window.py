@@ -247,7 +247,7 @@ class PomodoroApp:
         self.root.deiconify()
         self._is_mini = True
         self._mini_label.configure(text=self.ring.itemcget(self.ring._time_id, "text"))  # noqa
-        self.mini.configure(fg_color=T.MODE_CFG[self.engine.mode]["color"])
+        self.mini.configure(fg_color=T.MODE_CFG[self._mode_key()]["color"])
         w, h = MINI_WINDOW_SIZE
         self.root.resizable(True, True)
         self.root.geometry(f"{w}x{h}")
@@ -320,24 +320,40 @@ class PomodoroApp:
         else:
             self._set_buttons_idle()
 
-    def _enter_overtime(self) -> None:
-        self.engine.enter_overtime()
-        self._apply_mode_ui("overtime")
-        self.mode_selector.set(self._seg_value_for("break"))
+    def _enter_overtime(self, kind: str) -> None:
+        """時間到 → 進入超時累加狀態，並立刻讓 tick 繼續跑。
+
+        必須在彈出對話框「之前」呼叫：tkinter 的 modal 對話框會開一個
+        巢狀事件迴圈，`after()` 排程的 tick 在裡面照樣會觸發，
+        所以使用者在選擇之前，時間仍會持續累加。
+        """
+        self.engine.enter_overtime(kind)
+        self._apply_mode_ui(self._mode_key())
+        self.mode_selector.set(self._seg_value_for(kind))
         self.ring.set_progress(1.0)
-        self.ring.set_time("+00:00")
+        self.ring.set_time("+" + CL.format_duration(0))
         self._set_buttons_running()
         self._schedule_tick()
 
-    def _apply_mode_ui(self, mode: str) -> None:
-        cfg = T.MODE_CFG[mode]
+    def _mode_key(self) -> str:
+        """engine.mode → theme.MODE_CFG 的鍵。
+
+        engine 只有 "overtime" 一種超時模式，實際顯示／記錄要看
+        `overtime_kind` 才知道是「超時專注」還是「超時休息」。
+        """
+        if self.engine.mode == "overtime":
+            return T.OVERTIME_KEYS.get(self.engine.overtime_kind, "overtime_break")
+        return self.engine.mode
+
+    def _apply_mode_ui(self, key: str) -> None:
+        cfg = T.MODE_CFG[key]
         label = f"{cfg['icon']}  {cfg['name']}"
         self.status_badge.set_mode(label, cfg["badge_light"], cfg["badge_dark"])
         self.ring.set_color(cfg["color"])
         self.ring.set_sub(cfg["name"])
 
-        # 開始按鈕底色跟著模式變
-        if mode != "overtime":
+        # 開始按鈕底色跟著模式變（超時狀態下按鈕已被停用，不需換色）
+        if key not in ("overtime_work", "overtime_break"):
             self.btn_start.configure(fg_color=cfg["color"], hover_color=cfg["hover"])
         # 模式分段選擇器主色
         self.mode_selector.configure(
@@ -366,7 +382,7 @@ class PomodoroApp:
             return
         self._cancel_tick()
         self.engine.pause()
-        cfg = T.MODE_CFG[self.engine.mode]
+        cfg = T.MODE_CFG[self._mode_key()]
         self.btn_start.configure(state="normal", fg_color=cfg["color"], hover_color=cfg["hover"])
         self.btn_pause.configure(state="disabled", fg_color="#7A7A86", text="⏸  已暫停")
 
@@ -375,8 +391,9 @@ class PomodoroApp:
         self._save_current()
         self._toggle_block(False)
         self.engine.reset()
-        self._apply_mode_ui(self.engine.mode)
-        self.mode_selector.set(self._seg_value_for(self.engine.mode))
+        # reset() 之後 mode 才會回到 work/break，所以這裡重新取鍵
+        self._apply_mode_ui(self._mode_key())
+        self.mode_selector.set(self._seg_value_for(self._mode_key()))
         self.ring.set_progress(0)
         self.ring.set_time(self._format_remaining())
         self._set_buttons_idle()
@@ -414,31 +431,36 @@ class PomodoroApp:
             self.work_count += 1
             self._update_count_label()
 
+        # 先進入超時累加並繼續 tick，再彈對話框。
+        # 對話框的巢狀事件迴圈會照樣執行 after()，所以「還沒選擇之前」
+        # 的時間都會被累加進去，選擇「繼續」後也直接沿用同一段累加。
+        self._enter_overtime(mode)
+
         cfg = T.MODE_CFG[mode]
-        if mode == "break":
-            ans = messagebox.askokcancel(
-                "休息結束！",
-                f"{cfg['icon']} {cfg['name']}結束！\n\n• 確定 → 開始專注\n• 取消 → 繼續休息（記錄超時）",
-                icon="info", parent=self.root,
-            )
-            if ans:
-                self._switch_mode("work", auto_start=True)
-            else:
-                self._enter_overtime()
-        else:
+        if mode == "work":
             ans = messagebox.askokcancel(
                 "時間到！",
-                f"{cfg['icon']} {cfg['name']}結束！\n是否開始休息？",
+                f"{cfg['icon']} {cfg['name']}結束！\n\n"
+                "• 確定 → 開始休息\n"
+                "• 取消 → 繼續專注（記錄超時）\n\n"
+                "（計時持續累加中）",
                 icon="info", parent=self.root,
             )
             if ans:
                 self._switch_mode("break", auto_start=True)
-            else:
-                self.engine.elapsed = 0
-                self.engine.remaining = self.engine.work_seconds
-                self.ring.set_time(self._format_remaining())
-                self.ring.set_progress(0)
-                self._set_buttons_idle()
+            # 取消 → 留在「超時專注」續跑，不中斷
+        else:
+            ans = messagebox.askokcancel(
+                "休息結束！",
+                f"{cfg['icon']} {cfg['name']}結束！\n\n"
+                "• 確定 → 開始專注\n"
+                "• 取消 → 繼續休息（記錄超時）\n\n"
+                "（計時持續累加中）",
+                icon="info", parent=self.root,
+            )
+            if ans:
+                self._switch_mode("work", auto_start=True)
+            # 取消 → 留在「超時休息」續跑，不中斷
 
     # ======================================================================
     # UI 狀態切換
@@ -449,7 +471,7 @@ class PomodoroApp:
                                   hover_color="#C97900", text="⏸  暫停")
 
     def _set_buttons_idle(self) -> None:
-        cfg = T.MODE_CFG[self.engine.mode]
+        cfg = T.MODE_CFG[self._mode_key()]
         self.btn_start.configure(state="normal", fg_color=cfg["color"],
                                   hover_color=cfg["hover"])
         self.btn_pause.configure(state="disabled", fg_color="#7A7A86",
@@ -473,7 +495,7 @@ class PomodoroApp:
     def _save_current(self) -> None:
         if self.engine.elapsed == 0:
             return
-        activity = T.MODE_CFG[self.engine.mode]["csv"]
+        activity = T.MODE_CFG[self._mode_key()]["csv"]
         try:
             CL.append_row(activity, self.engine.elapsed,
                           overtime=(self.engine.mode == "overtime"))

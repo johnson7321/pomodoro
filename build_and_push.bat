@@ -50,18 +50,27 @@ echo Build OK -^> dist\pomodoro_window.exe
 echo.
 
 echo === [5/5] Git commit + push ===
+set MSG=%*
+if "%MSG%"=="" set MSG=Update pomodoro app
+echo Commit message: %MSG%
 if exist ".git\index.lock" (
     echo Removing stale .git\index.lock
     del /f /q ".git\index.lock" >NUL 2>&1
 )
 git add -A
-git commit -m "Refactor v2.0: modular structure + glassmorphism UI"
+git commit -m "%MSG%"
 if errorlevel 1 (
     echo Nothing new to commit, continuing.
 )
+git push origin main
+if errorlevel 1 (
+    echo [WARN] git push failed. Run "git push origin main" manually.
+)
+REM Keep master on the exact same commit so main/master never diverge again
+git branch -f master main
 git push origin master
 if errorlevel 1 (
-    echo [WARN] git push failed. Run "git push origin master" manually.
+    echo [WARN] could not sync master. Run "git push origin master" manually.
 )
 echo.
 

@@ -26,6 +26,7 @@ class TimerEngine:
         self.work_seconds = work_seconds
         self.break_seconds = break_seconds
         self.mode: Mode = "work"
+        self.overtime_kind: Mode = "break"  # mode == "overtime" 時，是從哪個模式延續
         self.elapsed: int = 0
         self.remaining: int = work_seconds
         self.is_running: bool = False
@@ -60,9 +61,14 @@ class TimerEngine:
         self.remaining = self._target_for(mode)
         self.is_running = False
 
-    def enter_overtime(self) -> None:
-        """休息結束後使用者選擇繼續休息 → 進入超時模式。"""
+    def enter_overtime(self, kind: Mode = "break") -> None:
+        """時間到之後使用者選擇「繼續」→ 進入超時累加模式。
+
+        ``kind`` 記錄是從哪個模式延續（"work" 或 "break"），
+        決定要把超時時數記成「超時專注」還是「超時休息」。
+        """
         self.mode = "overtime"
+        self.overtime_kind = kind
         self.elapsed = 0
         self.remaining = 0
         self.is_running = True
@@ -84,7 +90,8 @@ class TimerEngine:
         self.is_running = False
         self.elapsed = 0
         if self.mode == "overtime":
-            self.mode = "break"
+            # 回到超時之前的那個模式，而不是一律回休息
+            self.mode = self.overtime_kind
         self.remaining = self._target_for(self.mode)
 
     # ------------------------------------------------------------------
