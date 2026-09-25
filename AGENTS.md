@@ -74,5 +74,3 @@ PyInstaller → commit + push。可傳入 commit 訊息：`build_and_push.bat "�
 - `pomodoro/core/` 保持無 UI 依賴，方便單獨驗證。
 - `build/`、`dist/`、`venv/`、`*.csv` 都不進 git（見 `.gitignore`）。
 - **每完成一次變更，就把程式打包成視窗 APP 並推送到 GitHub 專案。**
-- `git_push.bat` 與 `fix_and_push.bat` 是舊腳本，硬編碼過時的 commit message 且只 push `master`，
-  已被 `build_and_push.bat` 取代 —— 不要用。
