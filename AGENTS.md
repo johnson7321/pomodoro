@@ -15,6 +15,9 @@ v2.0 已把原本的單檔 `pomodoro_window.py` 拆成 `pomodoro/` 套件，分�
   - `csv_logger.py` 讀寫紀錄檔、邏輯日換算
   - `hosts_blocker.py` 讀寫系統 hosts，需要管理員
   - `win11_effects.py` mica / 深色標題列，失敗靜默 fallback
+  - `alarm.py` 自行合成 WAV 播放鬧鐘（為了能調音量，不用 winsound 系統音效）
+  - `settings.py` 讀寫 `settings.json`（音量、開機啟動）
+  - `startup.py` 開機啟動：寫 `HKCU\...\Run` 的 `PomodoroTimer`，只在打包後的 exe 生效
 - `pomodoro/ui/` — customtkinter 畫面
   - `main_window.py` 主視窗，最大的檔，把 core 三者串起來
   - `widgets.py` 自訂元件：GlassCard / PillButton / GhostButton / StatusBadge / GlowRing / MinutesEntry
@@ -70,6 +73,9 @@ CSV 格式：`utf-8-sig`，欄位 `時間戳記,活動類型,持續時間`。
 7. **日期歸屬一律走邏輯日。** 時間戳記存的是實體時間（寫入時 `datetime.now()`），但「算哪一天」
    必須用 `logical_date_of()`。曾經用 `ts.startswith(get_logical_date())` 比對，結果 00:00~03:59
    的紀錄被印上當天日期、卻不屬於任何邏輯日 —— 圖表和「完成 N 次」同時看不到它。
+
+8. **打包版啟動時 `main.py` 會 `chdir` 到 exe 所在資料夾。** 紀錄檔、`blocked_sites.json`、
+   `settings.json` 都用相對路徑；開機自動啟動時工作目錄不是 exe 資料夾，不切過去就會寫到別處。
 
 ## 指令
 

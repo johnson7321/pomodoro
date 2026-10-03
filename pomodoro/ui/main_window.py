@@ -4,7 +4,6 @@
 """
 from __future__ import annotations
 
-import threading
 from tkinter import messagebox
 
 import customtkinter as ctk
@@ -18,8 +17,11 @@ from ..config import (
     MAIN_WINDOW_SIZE,
     MINI_WINDOW_SIZE,
 )
+from ..core import alarm as AL
 from ..core import csv_logger as CL
 from ..core import hosts_blocker as HB
+from ..core import settings as ST
+from ..core import startup as SU
 from ..core import win11_effects as W11
 from ..core.timer_engine import TimerEngine
 from .blocked_sites_window import open_blocked_sites_window
@@ -57,6 +59,10 @@ class PomodoroApp:
         self._timer_id = None
 
         self.work_count = CL.count_today_focus()
+
+        self.settings = ST.load()
+        if SU.is_frozen():
+            SU.set_enabled(self.settings["autostart"])
 
         # ── UI ──
         self.root.grid_columnconfigure(0, weight=1)
@@ -207,6 +213,37 @@ class PomodoroApp:
             action_col, text="🚫  封鎖網站設定",
             command=self._open_blocked,
         ).grid(row=1, column=0, sticky="ew", pady=(0, 6))
+
+        # ── 音量 ──
+        vol_row = ctk.CTkFrame(action_col, fg_color="transparent")
+        vol_row.grid(row=2, column=0, sticky="ew", pady=(6, 2))
+        vol_row.grid_columnconfigure(1, weight=1)
+        ctk.CTkLabel(vol_row, text="🔔 鬧鐘音量", font=(T.FONT_FAMILY_UI, 12),
+                     text_color=T.TEXT_SECONDARY).grid(row=0, column=0, padx=(2, 10))
+        self.volume_slider = ctk.CTkSlider(
+            vol_row, from_=0, to=100, number_of_steps=20,
+            command=self._on_volume_drag,
+        )
+        self.volume_slider.set(self.settings["volume"])
+        self.volume_slider.grid(row=0, column=1, sticky="ew")
+        self.volume_slider.bind("<ButtonRelease-1>", self._on_volume_release, add="+")
+        self.volume_label = ctk.CTkLabel(
+            vol_row, text=f"{self.settings['volume']}%", width=40,
+            font=(T.FONT_FAMILY_UI, 12), text_color=T.TEXT_SECONDARY,
+        )
+        self.volume_label.grid(row=0, column=2, padx=(8, 2))
+
+        # ── 開機自動啟動 ──
+        self.autostart_switch = ctk.CTkSwitch(
+            action_col, text="開機自動啟動", font=(T.FONT_FAMILY_UI, 12),
+            text_color=T.TEXT_SECONDARY, command=self._on_autostart_toggle,
+        )
+        self.autostart_switch.grid(row=3, column=0, sticky="w", padx=2, pady=(6, 0))
+        if SU.is_frozen():
+            if SU.is_enabled():
+                self.autostart_switch.select()
+        else:
+            self.autostart_switch.configure(text="開機自動啟動（僅打包版可用）", state="disabled")
 
         # ── 底部 ──
         ctk.CTkLabel(
@@ -508,14 +545,24 @@ class PomodoroApp:
     # 鬧鐘
     # ======================================================================
     def _play_alarm(self) -> None:
-        def _sound():
-            try:
-                import winsound
-                winsound.PlaySound("SystemExclamation", winsound.SND_ALIAS)
-                winsound.PlaySound("SystemExclamation", winsound.SND_ALIAS)
-            except Exception:
-                pass
-        threading.Thread(target=_sound, daemon=True).start()
+        AL.play(self.settings["volume"])
+
+    def _on_volume_drag(self, value: float) -> None:
+        self.volume_label.configure(text=f"{int(value)}%")
+
+    def _on_volume_release(self, _event=None) -> None:
+        self.settings["volume"] = int(self.volume_slider.get())
+        ST.save(self.settings)
+        AL.play(self.settings["volume"])
+
+    def _on_autostart_toggle(self) -> None:
+        enabled = bool(self.autostart_switch.get())
+        if SU.set_enabled(enabled):
+            self.settings["autostart"] = enabled
+            ST.save(self.settings)
+        else:
+            self.autostart_switch.toggle()
+            messagebox.showerror("錯誤", "無法修改開機啟動設定。", parent=self.root)
 
     # ======================================================================
     # Always on top
