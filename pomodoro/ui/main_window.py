@@ -20,7 +20,7 @@ from ..core.timer_engine import TimerEngine
 from . import icons as IC
 from .history_chart import open_history_chart
 from .setup_page import SetupPage
-from .widgets import GhostButton, GlowRing, PillButton
+from .widgets import GhostButton, GlowRing, RoundIconButton
 
 
 class PomodoroApp:
@@ -54,8 +54,6 @@ class PomodoroApp:
         self._is_mini = False
         self._timer_id = None
 
-        self.work_count = CL.count_today_focus()
-
         self._in_setup = False
         if SU.is_frozen():
             SU.set_enabled(self.settings["autostart"])
@@ -67,7 +65,6 @@ class PomodoroApp:
         self._build_setup_ui()
         self._build_mini_ui()
         self._apply_mode_ui("work")
-        self._refresh_banner()
 
         # 套用 Win11 mica（失敗會 silently 回 fallback 純色）
         self._apply_glass_effect()
@@ -75,7 +72,6 @@ class PomodoroApp:
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         self.root.bind("<Unmap>", self._on_unmap)
         self._bind_shortcuts()
-        self._update_count_label()
 
     # ======================================================================
     # 主視窗建構
@@ -127,67 +123,28 @@ class PomodoroApp:
         self.mode_selector.set(seg_values[0])
         self.mode_selector.grid(row=2, column=0, padx=30, pady=(0, 6), sticky="ew")
 
-        # ── 控制按鈕 ──
+        # ── 控制：單一播放／暫停鈕（只有符號）＋ 重置 ──
         btn_row = ctk.CTkFrame(self.main, fg_color="transparent")
-        btn_row.grid(row=3, column=0, pady=4)
+        btn_row.grid(row=3, column=0, pady=(12, 6))
 
-        # 主次分明：「開始」最寬、最醒目；「暫停」次之；「重置」只留外框，避免與主動作搶焦點
-        self.btn_start = PillButton(
-            btn_row, text="開始", icon="play", icon_size=18,
-            color=T.MODE_CFG["work"]["color"],
-            hover=T.MODE_CFG["work"]["hover"],
-            text_color=T.ON_ACCENT,
-            command=self.start_timer, width=148, height=46,
+        # 左側放一個和重置鈕同寬的空位，主按鈕才會在視窗正中央
+        ctk.CTkFrame(btn_row, width=54, height=54, fg_color="transparent").pack(side="left", padx=12)
+        self.btn_main = RoundIconButton(
+            btn_row, size=78, icon="play", icon_size=30, glow=True,
+            fill=T.MODE_CFG["work"]["color"], hover_fill=T.MODE_CFG["work"]["hover"],
+            icon_color=T.ON_ACCENT, command=self._toggle_run,
         )
-        self.btn_start.pack(side="left", padx=5)
-
-        self.btn_pause = PillButton(
-            btn_row, text="暫停", icon="pause", icon_size=18,
-            color=T.DISABLED_BG, hover="#C97900",
-            text_color=T.ON_AMBER,
-            command=self.pause_timer, width=104, height=46,
+        self.btn_main.pack(side="left", padx=2)
+        self.btn_reset = RoundIconButton(
+            btn_row, size=54, icon="reset", icon_size=22,
+            outline=T.BORDER_GLASS, hover_fill=("#FBE3E3", "#3A1A1E"),
+            icon_color=T.TEXT_SECONDARY, command=self.reset_timer,
         )
-        self.btn_pause.configure(state="disabled")
-        self.btn_pause.pack(side="left", padx=5)
-
-        self.btn_reset = GhostButton(
-            btn_row, text="重置", icon="reset", icon_size=18,
-            width=92, height=46, corner_radius=23,
-            text_color=T.TEXT_SECONDARY,
-            hover_color=("#FBE3E3", "#3A1A1E"),
-            command=self.reset_timer,
-        )
-        self.btn_reset.pack(side="left", padx=5)
-
-        # ── 計數：主資訊（完成次數）與輔助資訊（邏輯日區間）分兩行 ──
-        self.count_label = ctk.CTkLabel(
-            self.main, text=" 完成 0 次專注",
-            image=IC.logo(20), compound="left",
-            font=(T.FONT_FAMILY_UI, 14, "bold"),
-            text_color=T.TEXT_PRIMARY,
-        )
-        self.count_label.grid(row=4, column=0, pady=(10, 0))
-        self.day_label = ctk.CTkLabel(
-            self.main, text="",
-            font=(T.FONT_FAMILY_UI, 11),
-            text_color=T.TEXT_MUTED,
-        )
-        self.day_label.grid(row=5, column=0, pady=(0, 6))
-
-        # ── 沒有管理員權限時的提示列（平常隱藏，點一下前往設定頁處理） ──
-        self.admin_banner = ctk.CTkButton(
-            self.main, text=" 封鎖網站尚未生效：需要管理員權限　›",
-            image=IC.icon("warn", 16, ("#8A5A00", "#FFD27A")), compound="left",
-            height=32, corner_radius=10, font=(T.FONT_FAMILY_UI, 12),
-            fg_color=("#FFF3DC", "#3A2C10"), hover_color=("#FFE7B8", "#4A3814"),
-            text_color=("#8A5A00", "#FFD27A"),
-            command=self.show_setup,
-        )
-        self.admin_banner.grid(row=6, column=0, sticky="ew", padx=30, pady=(2, 4))
+        self.btn_reset.pack(side="left", padx=12)
 
         # ── 功能入口：兩顆並排的次要按鈕 ──
         action_col = ctk.CTkFrame(self.main, fg_color="transparent")
-        action_col.grid(row=7, column=0, sticky="ew", padx=30, pady=(4, 0))
+        action_col.grid(row=4, column=0, sticky="ew", padx=30, pady=(12, 22))
         action_col.grid_columnconfigure((0, 1), weight=1, uniform="act")
 
         GhostButton(
@@ -199,14 +156,6 @@ class PomodoroApp:
             action_col, text="設定", icon="gear", icon_size=18,
             command=self.show_setup,
         ).grid(row=0, column=1, sticky="ew", padx=(4, 0))
-
-        # ── 底部：快捷鍵提示 ──
-        ctk.CTkLabel(
-            self.main,
-            text="空白鍵 開始／暫停　R 重置　← → 切換模式\nS 設定　T 統計　P 釘選　M 迷你模式",
-            text_color=T.TEXT_MUTED, justify="center",
-            font=(T.FONT_FAMILY_UI, 11),
-        ).grid(row=8, column=0, pady=(12, 12))
 
     # ======================================================================
     # 設定頁
@@ -259,13 +208,6 @@ class PomodoroApp:
         self.main.grid()
         if idle and self.engine.mode != "overtime":
             self.ring.set_time(self._format_remaining())
-        self._refresh_banner()
-
-    def _refresh_banner(self) -> None:
-        if self.blocked_sites and not HB.is_admin():
-            self.admin_banner.grid()
-        else:
-            self.admin_banner.grid_remove()
 
     # 設定頁的回呼
     def _commit_volume(self, volume: int) -> None:
@@ -284,7 +226,6 @@ class PomodoroApp:
         HB.save_sites(sites)
         if self._sites_active:
             self._toggle_block(True)  # 專注中改清單：立刻重新套用
-        self._refresh_banner()
 
     def _restart_admin(self) -> None:
         if self.engine.elapsed > 0:
@@ -409,10 +350,8 @@ class PomodoroApp:
 
         if auto_start:
             self.engine.start()
-            self._set_buttons_running()
             self._schedule_tick()
-        else:
-            self._set_buttons_idle()
+        self._refresh_primary()
         self.ring.set_sub(self._state_text())
 
     def _enter_overtime(self, kind: str) -> None:
@@ -427,8 +366,8 @@ class PomodoroApp:
         self.mode_selector.set(self._seg_value_for(kind))
         self.ring.set_progress(1.0)
         self.ring.set_time("+" + CL.format_duration(0))
-        self._set_buttons_running()
         self._schedule_tick()
+        self._refresh_primary()
 
     def _mode_key(self) -> str:
         """engine.mode → theme.MODE_CFG 的鍵。
@@ -456,9 +395,7 @@ class PomodoroApp:
         self.ring.set_color(cfg["color"])
         self.ring.set_sub(self._state_text())
 
-        # 開始按鈕底色跟著模式變（超時狀態下按鈕已被停用，不需換色）
-        if key not in ("overtime_work", "overtime_break"):
-            self.btn_start.configure(fg_color=cfg["color"], hover_color=cfg["hover"])
+        self._refresh_primary()
         # 模式分段選擇器主色
         self.mode_selector.configure(
             selected_color=cfg["color"], selected_hover_color=cfg["hover"],
@@ -478,7 +415,7 @@ class PomodoroApp:
         if self.engine.mode == "work" and not self._sites_active:
             self._toggle_block(True)
         self.engine.start()
-        self._set_buttons_running()
+        self._refresh_primary()
         self.ring.set_sub(self._state_text())
         self._schedule_tick()
 
@@ -487,10 +424,7 @@ class PomodoroApp:
             return
         self._cancel_tick()
         self.engine.pause()
-        cfg = T.MODE_CFG[self._mode_key()]
-        self.btn_start.configure(state="normal", fg_color=cfg["color"],
-                                  hover_color=cfg["hover"], text="繼續")
-        self.btn_pause.configure(state="disabled", fg_color=T.DISABLED_BG, text="暫停")
+        self._refresh_primary()
         self.ring.set_sub(self._state_text())
 
     def reset_timer(self) -> None:
@@ -503,7 +437,7 @@ class PomodoroApp:
         self.mode_selector.set(self._seg_value_for(self._mode_key()))
         self.ring.set_progress(0)
         self.ring.set_time(self._format_remaining())
-        self._set_buttons_idle()
+        self._refresh_primary()
 
     # ── tick 排程 ──
     def _schedule_tick(self) -> None:
@@ -533,10 +467,6 @@ class PomodoroApp:
     def _on_engine_complete(self, mode) -> None:
         self._play_alarm()
         self._save_current()
-
-        if mode == "work":
-            self.work_count += 1
-            self._update_count_label()
 
         # 先進入超時累加並繼續 tick，再彈對話框。
         # 對話框的巢狀事件迴圈會照樣執行 after()，所以「還沒選擇之前」
@@ -572,17 +502,17 @@ class PomodoroApp:
     # ======================================================================
     # UI 狀態切換
     # ======================================================================
-    def _set_buttons_running(self) -> None:
-        self.btn_start.configure(state="disabled", fg_color=T.DISABLED_BG, text="開始")
-        self.btn_pause.configure(state="normal", fg_color=T.PAUSE_COLOR,
-                                  hover_color="#C97900", text="暫停")
-
-    def _set_buttons_idle(self) -> None:
-        cfg = T.MODE_CFG[self._mode_key()]
-        self.btn_start.configure(state="normal", fg_color=cfg["color"],
-                                  hover_color=cfg["hover"], text="開始")
-        self.btn_pause.configure(state="disabled", fg_color=T.DISABLED_BG,
-                                  text="暫停")
+    def _refresh_primary(self) -> None:
+        """單一主按鈕：計時中顯示暫停符號（琥珀色），其餘顯示播放符號（模式色）。"""
+        if self.engine.is_running:
+            self.btn_main.set_style(
+                icon="pause", fill=T.PAUSE_COLOR, hover_fill="#C97900", icon_color=T.ON_AMBER,
+            )
+        else:
+            cfg = T.MODE_CFG[self._mode_key()]
+            self.btn_main.set_style(
+                icon="play", fill=cfg["color"], hover_fill=cfg["hover"], icon_color=T.ON_ACCENT,
+            )
 
     # ======================================================================
     # 設定 / 紀錄
@@ -622,12 +552,6 @@ class PomodoroApp:
 
     def _format_remaining(self) -> str:
         return CL.format_duration(self.engine.remaining)
-
-    def _update_count_label(self) -> None:
-        # 顯示邏輯日的實際區間，而不是含糊的「今日」（凌晨 0~4 點算前一天）
-        span = CL.format_logical_day_window(CL.get_logical_date())
-        self.count_label.configure(text=f" 完成 {self.work_count} 次專注")
-        self.day_label.configure(text=span)
 
     # ======================================================================
     # 鬧鐘
@@ -707,8 +631,7 @@ class PomodoroApp:
             self._sites_active = False
             return
         if enable and not HB.is_admin():
-            self._refresh_banner()  # 沒權限就不封鎖；提示列會引導使用者到設定頁處理
-            return
+            return  # 沒權限就不封鎖；狀態與重新啟動按鈕在設定頁處理
         ok = HB.apply_block(self.blocked_sites, enable)
         if ok:
             self._sites_active = enable

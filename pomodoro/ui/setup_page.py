@@ -1,6 +1,6 @@
-"""設定頁：主視窗的「設定」按鈕切換進來的整頁，集中所有可調整的項目。
+"""設定頁：主視窗的「設定」按鈕切換進來的整頁，集中所有可調整的項目與說明。
 
-包含：專注／休息時長、鬧鐘音量、開機自動啟動、管理員權限狀態、封鎖網站清單。
+左欄：計時、提醒、快捷鍵說明；右欄：系統（開機啟動、管理員權限）、封鎖網站。
 需要使用者處理的事（例如沒有管理員權限）都顯示在這一頁，不跳出詢問視窗。
 """
 from __future__ import annotations
@@ -13,6 +13,17 @@ from .. import theme as T
 from ..core import hosts_blocker as HB
 from . import icons as IC
 from .widgets import GhostButton, GlassCard, MinutesEntry, PillButton
+
+KEYCAP_BG = ("#EDE8E3", "#33333F")
+
+# 快捷鍵說明（與 main_window._on_key 同步）：(按鍵, 說明)
+SHORTCUTS = [
+    (("空白鍵",), "開始／暫停"), (("R",), "重置"),
+    (("←", "1"), "專注"), (("→", "2"), "休息"),
+    (("S",), "設定"), (("T",), "時間統計"),
+    (("P",), "釘選視窗"), (("M",), "迷你模式"),
+    (("Esc",), "返回／離開迷你"),
+]
 
 
 class SetupPage(ctk.CTkFrame):
@@ -32,6 +43,7 @@ class SetupPage(ctk.CTkFrame):
     ) -> None:
         super().__init__(master, fg_color="transparent")
         self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=1)
         self._sites = sites
         self._on_volume_commit = on_volume_commit
         self._on_autostart = on_autostart
@@ -41,56 +53,82 @@ class SetupPage(ctk.CTkFrame):
 
         # ── 標題列 ──
         head = ctk.CTkFrame(self, fg_color="transparent")
-        head.grid(row=0, column=0, sticky="ew", padx=22, pady=(20, 4))
+        head.grid(row=0, column=0, sticky="ew", padx=28, pady=(22, 2))
         GhostButton(
             head, text="返回", icon="back", icon_size=16,
             width=84, height=34, command=on_back,
         ).pack(side="left")
         ctk.CTkLabel(
-            head, text="設定", font=(T.FONT_FAMILY_UI, 18, "bold"),
+            head, text="設定", font=(T.FONT_FAMILY_UI, 20, "bold"),
             text_color=T.TEXT_PRIMARY,
-        ).pack(side="left", padx=14)
+        ).pack(side="left", padx=16)
         ctk.CTkLabel(
             head, text="Esc 返回", font=(T.FONT_FAMILY_UI, 11),
             text_color=T.TEXT_MUTED,
         ).pack(side="right")
 
-        # ── 計時 ──
-        card = self._section("計時", 1)
-        inner = ctk.CTkFrame(card, fg_color="transparent")
-        inner.pack(pady=10)
-        lbl_font = (T.FONT_FAMILY_UI, 12, "bold")
-        ctk.CTkLabel(
-            inner, text=" 專注", compound="left",
-            image=IC.icon("dot", 12, T.MODE_CFG["work"]["color"]),
-            font=lbl_font, text_color=T.MODE_CFG["work"]["color"],
-        ).pack(side="left", padx=(2, 6))
-        self.work_entry = MinutesEntry(inner, default=settings["work_minutes"])
-        self.work_entry.pack(side="left", padx=(0, 2))
-        ctk.CTkLabel(inner, text="分", font=(T.FONT_FAMILY_UI, 12),
-                     text_color=T.TEXT_SECONDARY).pack(side="left", padx=(0, 22))
-        ctk.CTkLabel(
-            inner, text=" 休息", compound="left",
-            image=IC.icon("dot", 12, T.MODE_CFG["break"]["color"]),
-            font=lbl_font, text_color=T.MODE_CFG["break"]["color"],
-        ).pack(side="left", padx=(2, 6))
-        self.break_entry = MinutesEntry(inner, default=settings["break_minutes"])
-        self.break_entry.pack(side="left", padx=(0, 2))
-        ctk.CTkLabel(inner, text="分", font=(T.FONT_FAMILY_UI, 12),
-                     text_color=T.TEXT_SECONDARY).pack(side="left")
+        # ── 兩欄 ──
+        body = ctk.CTkFrame(self, fg_color="transparent")
+        body.grid(row=1, column=0, sticky="nsew", padx=22)
+        body.grid_columnconfigure((0, 1), weight=1, uniform="col")
+        body.grid_rowconfigure(0, weight=1)
+        left = ctk.CTkFrame(body, fg_color="transparent")
+        left.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
+        right = ctk.CTkFrame(body, fg_color="transparent")
+        right.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
 
-        # ── 提醒 ──
-        card = self._section("提醒", 3)
-        vol_row = ctk.CTkFrame(card, fg_color="transparent")
-        vol_row.pack(fill="x", padx=14, pady=10)
-        vol_row.grid_columnconfigure(1, weight=1)
+        self._build_timer(self._section(left, "計時"), settings)
+        self._build_reminder(self._section(left, "提醒"), settings)
+        self._build_shortcuts(self._section(left, "快捷鍵", expand=True))
+        self._build_system(self._section(right, "系統"), autostart_available, autostart_on)
+        self._build_blocked(self._section(right, "封鎖網站", expand=True))
+
+        # ── 提示訊息（錯誤與回饋都在這裡，不跳視窗） ──
+        self._msg = ctk.CTkLabel(
+            self, text="", font=(T.FONT_FAMILY_UI, 12), text_color=T.WARNING, wraplength=700,
+        )
+        self._msg.grid(row=2, column=0, pady=(4, 10))
+
+    # ------------------------------------------------------------------
+    def _section(self, parent, title: str, *, expand: bool = False) -> GlassCard:
         ctk.CTkLabel(
-            vol_row, text=" 鬧鐘音量", compound="left",
-            image=IC.icon("bell", 16, T.TEXT_SECONDARY),
-            font=(T.FONT_FAMILY_UI, 12), text_color=T.TEXT_SECONDARY,
-        ).grid(row=0, column=0, padx=(0, 12))
+            parent, text=title, font=(T.FONT_FAMILY_UI, 11, "bold"),
+            text_color=T.TEXT_MUTED, anchor="w",
+        ).pack(fill="x", padx=8, pady=(14, 4))
+        card = GlassCard(parent)
+        card.pack(fill="both" if expand else "x", expand=expand)
+        return card
+
+    def _build_timer(self, card: GlassCard, settings: dict) -> None:
+        card.grid_columnconfigure(0, weight=1)
+        rows = (
+            ("work", "專注", "work_minutes", "work_entry"),
+            ("break", "休息", "break_minutes", "break_entry"),
+        )
+        for r, (mode, label, key, attr) in enumerate(rows):
+            color = T.MODE_CFG[mode]["color"]
+            pad = (14 if r == 0 else 4, 14 if r == 1 else 4)
+            ctk.CTkLabel(
+                card, text=f" {label}時長", compound="left", image=IC.icon("dot", 12, color),
+                font=(T.FONT_FAMILY_UI, 13), text_color=T.TEXT_PRIMARY, anchor="w",
+            ).grid(row=r, column=0, sticky="w", padx=(16, 0), pady=pad)
+            entry = MinutesEntry(card, default=settings[key], width=64, height=36)
+            entry.grid(row=r, column=1, padx=(8, 4), pady=pad)
+            setattr(self, attr, entry)
+            ctk.CTkLabel(
+                card, text="分鐘", font=(T.FONT_FAMILY_UI, 12), text_color=T.TEXT_SECONDARY,
+            ).grid(row=r, column=2, padx=(0, 16))
+
+    def _build_reminder(self, card: GlassCard, settings: dict) -> None:
+        row = ctk.CTkFrame(card, fg_color="transparent")
+        row.pack(fill="x", padx=16, pady=14)
+        row.grid_columnconfigure(1, weight=1)
+        ctk.CTkLabel(
+            row, text=" 鬧鐘音量", compound="left", image=IC.icon("bell", 16, T.TEXT_SECONDARY),
+            font=(T.FONT_FAMILY_UI, 13), text_color=T.TEXT_PRIMARY,
+        ).grid(row=0, column=0, padx=(0, 14))
         self.volume_slider = ctk.CTkSlider(
-            vol_row, from_=0, to=100, number_of_steps=20,
+            row, from_=0, to=100, number_of_steps=20,
             command=lambda v: self.volume_label.configure(text=f"{int(v)}%"),
             button_color=T.MODE_CFG["work"]["color"],
             button_hover_color=T.MODE_CFG["work"]["hover"],
@@ -103,38 +141,56 @@ class SetupPage(ctk.CTkFrame):
             lambda e: self._on_volume_commit(int(self.volume_slider.get())), add="+",
         )
         self.volume_label = ctk.CTkLabel(
-            vol_row, text=f"{settings['volume']}%", width=42, anchor="e",
+            row, text=f"{settings['volume']}%", width=44, anchor="e",
             font=(T.FONT_FAMILY_UI, 12, "bold"), text_color=T.TEXT_SECONDARY,
         )
         self.volume_label.grid(row=0, column=2, padx=(8, 0))
 
-        # ── 系統 ──
-        card = self._section("系統", 5)
+    def _build_shortcuts(self, card: GlassCard) -> None:
+        grid = ctk.CTkFrame(card, fg_color="transparent")
+        grid.pack(fill="x", padx=16, pady=12)
+        grid.grid_columnconfigure((0, 1), weight=1, uniform="sc")
+        for i, (keys, desc) in enumerate(SHORTCUTS):
+            cell = ctk.CTkFrame(grid, fg_color="transparent")
+            cell.grid(row=i // 2, column=i % 2, sticky="w", pady=4)
+            for j, k in enumerate(keys):
+                if j:
+                    ctk.CTkLabel(cell, text="/", font=(T.FONT_FAMILY_UI, 11),
+                                 text_color=T.TEXT_MUTED, width=10).pack(side="left")
+                ctk.CTkLabel(
+                    cell, text=k, font=(T.FONT_FAMILY_UI, 11, "bold"), text_color=T.TEXT_PRIMARY,
+                    fg_color=KEYCAP_BG, corner_radius=6, height=24,
+                    width=max(26, 12 * len(k) + 14),
+                ).pack(side="left")
+            ctk.CTkLabel(
+                cell, text=desc, font=(T.FONT_FAMILY_UI, 12), text_color=T.TEXT_SECONDARY,
+            ).pack(side="left", padx=(8, 0))
+
+    def _build_system(self, card: GlassCard, autostart_available: bool, autostart_on: bool) -> None:
         self.autostart_switch = ctk.CTkSwitch(
-            card, text="開機自動啟動", font=(T.FONT_FAMILY_UI, 12),
-            text_color=T.TEXT_SECONDARY, command=self._toggle_autostart,
+            card, text="開機自動啟動", font=(T.FONT_FAMILY_UI, 13),
+            text_color=T.TEXT_PRIMARY, command=self._toggle_autostart,
             progress_color=T.MODE_CFG["work"]["color"],
         )
-        self.autostart_switch.pack(anchor="w", padx=14, pady=(10, 0))
+        self.autostart_switch.pack(anchor="w", padx=16, pady=(14, 0))
         if not autostart_available:
             self.autostart_switch.configure(text="開機自動啟動（僅打包版可用）", state="disabled")
         elif autostart_on:
             self.autostart_switch.select()
-        ctk.CTkFrame(card, height=1, fg_color=T.DIVIDER).pack(fill="x", padx=14, pady=(10, 8))
+        ctk.CTkFrame(card, height=1, fg_color=T.DIVIDER).pack(fill="x", padx=16, pady=(12, 10))
         self._admin_box = ctk.CTkFrame(card, fg_color="transparent")
-        self._admin_box.pack(fill="x", padx=14, pady=(0, 10))
+        self._admin_box.pack(fill="x", padx=16, pady=(0, 14))
         self.refresh_admin()
 
-        # ── 封鎖網站 ──
-        card = self._section("封鎖網站", 7)
+    def _build_blocked(self, card: GlassCard) -> None:
         ctk.CTkLabel(
             card, text="專注時自動封鎖，切換為休息或重置時解除。",
             font=(T.FONT_FAMILY_UI, 11), text_color=T.TEXT_MUTED, anchor="w",
-        ).pack(fill="x", padx=14, pady=(8, 2))
-        self._list = ctk.CTkScrollableFrame(card, fg_color="transparent", corner_radius=0, height=84)
-        self._list.pack(fill="x", padx=8)
+        ).pack(fill="x", padx=16, pady=(12, 4))
+        self._list = ctk.CTkScrollableFrame(card, fg_color="transparent", corner_radius=0, height=100)
+        self._list.pack(fill="both", expand=True, padx=10)
         add_row = ctk.CTkFrame(card, fg_color="transparent")
-        add_row.pack(fill="x", padx=14, pady=(6, 10))
+        add_row.pack(fill="x", padx=16, pady=(6, 14))
         self._entry = ctk.CTkEntry(
             add_row, placeholder_text="輸入網站，例：youtube.com",
             font=(T.FONT_FAMILY_MONO, 13), height=36, corner_radius=10,
@@ -149,22 +205,7 @@ class SetupPage(ctk.CTkFrame):
         ).pack(side="left")
         self._refresh_list()
 
-        # ── 提示訊息（錯誤與回饋都在這裡，不跳視窗） ──
-        self._msg = ctk.CTkLabel(
-            self, text="", font=(T.FONT_FAMILY_UI, 12), text_color=T.WARNING, wraplength=380,
-        )
-        self._msg.grid(row=9, column=0, pady=(6, 8))
-
     # ------------------------------------------------------------------
-    def _section(self, title: str, row: int) -> GlassCard:
-        ctk.CTkLabel(
-            self, text=title, font=(T.FONT_FAMILY_UI, 11, "bold"),
-            text_color=T.TEXT_MUTED, anchor="w",
-        ).grid(row=row, column=0, sticky="w", padx=34, pady=(8, 3))
-        card = GlassCard(self)
-        card.grid(row=row + 1, column=0, sticky="ew", padx=30)
-        return card
-
     def show_message(self, text: str, ms: int = 5000) -> None:
         if self._msg_job:
             self.after_cancel(self._msg_job)
@@ -208,7 +249,7 @@ class SetupPage(ctk.CTkFrame):
             ctk.CTkLabel(
                 self._list, text="（尚未加入任何網站）",
                 font=(T.FONT_FAMILY_UI, 12), text_color=T.TEXT_MUTED,
-            ).pack(pady=18)
+            ).pack(pady=24)
             return
         for site in list(self._sites):
             row = ctk.CTkFrame(self._list, fg_color="transparent")

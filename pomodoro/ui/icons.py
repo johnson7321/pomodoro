@@ -12,7 +12,7 @@ from functools import lru_cache
 from typing import Tuple, Union
 
 import customtkinter as ctk
-from PIL import Image, ImageDraw, ImageOps
+from PIL import Image, ImageDraw, ImageFilter, ImageOps
 
 _SS = 4      # 繪製時的超取樣倍率
 _HIDPI = 2   # 輸出解析度為顯示尺寸的幾倍，高 DPI 螢幕才不會糊
@@ -185,6 +185,35 @@ def _render(name: str, px: int, color: str) -> Image.Image:
     return layer.resize((px, px), Image.LANCZOS)
 
 
+def circle_button_image(px: int, fill, outline, name: str, icon_px: int, icon_color: str,
+                        glow: bool = False) -> Image.Image:
+    """圓形按鈕整張圖（底色／外框／圖示／柔光）。px 為圓的直徑（像素），有柔光時圖會比圓大一圈。"""
+    ss = 4
+    pad = int(px * 0.14) if glow else 0
+    total = px + 2 * pad
+    out = Image.new("RGBA", (total, total), (0, 0, 0, 0))
+    box = [pad * ss, pad * ss, (pad + px) * ss, (pad + px) * ss]
+
+    if glow and fill:
+        g = Image.new("RGBA", (total, total), _rgb(fill) + (0,))
+        ImageDraw.Draw(g).ellipse([pad, pad, pad + px, pad + px], fill=_rgb(fill) + (255,))
+        g = g.filter(ImageFilter.GaussianBlur(pad * 0.55))
+        g.putalpha(g.getchannel("A").point(lambda a: int(a * 0.55)))
+        out.alpha_composite(g)
+
+    base_rgb = _rgb(fill or outline or "#808080")
+    disc = Image.new("RGBA", (total * ss, total * ss), base_rgb + (0,))
+    d = ImageDraw.Draw(disc)
+    d.ellipse(box, fill=(_rgb(fill) + (255,)) if fill else None,
+              outline=(_rgb(outline) + (255,)) if outline else None, width=int(ss * 1.6))
+    out.alpha_composite(disc.resize((total, total), Image.LANCZOS))
+
+    icon_img = _render(name, icon_px, icon_color)
+    off = (total - icon_px) // 2
+    out.alpha_composite(icon_img, (off, off))
+    return out
+
+
 @lru_cache(maxsize=256)
 def _cached(name: str, size: int, light: str, dark: str) -> ctk.CTkImage:
     px = size * _HIDPI
@@ -204,12 +233,6 @@ def icon(name: str, size: int = 18, color: Color = "#FFFFFF") -> ctk.CTkImage:
 # ---------------------------------------------------------------------------
 # App 標誌與視窗圖示
 # ---------------------------------------------------------------------------
-@lru_cache(maxsize=8)
-def logo(size: int = 20) -> ctk.CTkImage:
-    img = Image.open(resource_path(os.path.join("assets", "app.png"))).convert("RGBA")
-    return ctk.CTkImage(light_image=img, dark_image=img, size=(size, size))
-
-
 def apply_window_icon(win) -> None:
     """替視窗換上番茄圖示。
 

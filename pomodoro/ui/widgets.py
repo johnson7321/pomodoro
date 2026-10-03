@@ -70,6 +70,65 @@ class PillButton(_IconMixin, ctk.CTkButton):
             self._init_icon(icon, icon_size, icon_color or kw["text_color"], T.DISABLED_FG)
 
 
+class RoundIconButton(ctk.CTkButton):
+    """圓形純圖示按鈕。
+
+    CTkButton 有圖示時會在左右各留「圓角半徑」寬的內距，圓角越大按鈕越被撐寬，
+    做不出正圓。所以整顆圓（底色、外框、圖示、柔光）用 Pillow 畫成圖片，
+    按鈕本身圓角為 0，滑過時換成 hover 版本的圖。
+    """
+
+    _HI = 2  # 圖片解析度為顯示尺寸的倍數（高 DPI 才不會糊）
+
+    def __init__(self, master, *, size: int = 54, icon: str, icon_size: int = 22,
+                 fill=None, hover_fill=None, icon_color="#FFFFFF", outline=None,
+                 glow: bool = False, command=None) -> None:
+        self._diam = size
+        self._rb_glow = glow
+        self._rb_cfg = dict(icon=icon, icon_size=icon_size, fill=fill, hover_fill=hover_fill,
+                         icon_color=icon_color, outline=outline)
+        total = size + 2 * (int(size * 0.14) if glow else 0)
+        super().__init__(master, text="", width=total, height=total, corner_radius=0,
+                         border_width=0, border_spacing=0, fg_color="transparent",
+                         hover=False, command=command)
+        self._rebuild()
+        self.bind("<Enter>", lambda e: self._show(True), add="+")
+        self.bind("<Leave>", lambda e: self._show(False), add="+")
+
+    @staticmethod
+    def _pick(value, idx: int):
+        if value is None or isinstance(value, str):
+            return value
+        return value[idx]
+
+    def _make_image(self, fill, outline) -> ctk.CTkImage:
+        c, px = self._rb_cfg, self._diam * self._HI
+        total = self._diam + 2 * (int(self._diam * 0.14) if self._rb_glow else 0)
+
+        def one(idx: int):
+            return icons.circle_button_image(
+                px, self._pick(fill, idx), self._pick(outline, idx), c["icon"],
+                c["icon_size"] * self._HI, self._pick(c["icon_color"], idx), self._rb_glow)
+
+        return ctk.CTkImage(light_image=one(0), dark_image=one(1), size=(total, total))
+
+    def _rebuild(self) -> None:
+        c = self._rb_cfg
+        self._img_normal = self._make_image(c["fill"], c["outline"])
+        self._img_hover = self._make_image(c["hover_fill"] or c["fill"], c["outline"])
+        self._show(False, redraw=True)
+
+    def _show(self, hover: bool, redraw: bool = False) -> None:
+        # CTkButton 只有在重畫時才會建立圖示標籤，第一次設定圖片必須 require_redraw
+        ctk.CTkButton.configure(self, require_redraw=redraw,
+                                image=self._img_hover if hover else self._img_normal)
+
+    def set_style(self, **changes) -> None:
+        """更換圖示／顏色（例如播放 ↔ 暫停）。"""
+        self._rb_cfg.update(changes)
+        self._rebuild()
+
+
 class GhostButton(_IconMixin, ctk.CTkButton):
     """透明底 + 細邊框的次要按鈕。"""
 

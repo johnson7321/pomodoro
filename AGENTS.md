@@ -20,10 +20,11 @@ v2.0 已把原本的單檔 `pomodoro_window.py` 拆成 `pomodoro/` 套件，分�
   - `startup.py` 開機啟動：寫 `HKCU\...\Run` 的 `PomodoroTimer`，只在打包後的 exe 生效
 - `pomodoro/ui/` — customtkinter 畫面
   - `main_window.py` 主視窗，最大的檔，把 core 三者串起來
-  - `widgets.py` 自訂元件：GlassCard / PillButton / GhostButton / GlowRing / MinutesEntry
+  - `widgets.py` 自訂元件：GlassCard / PillButton / GhostButton / RoundIconButton / GlowRing / MinutesEntry
     （GlowRing 的環用 Pillow 超取樣繪成圖片放在 Canvas 底層以消除鋸齒，文字仍是 Canvas 文字）
   - `icons.py` 用 Pillow 畫的單色圖示組（`icon(name, size, color)`）、App 標誌、`apply_window_icon()`
-  - `setup_page.py` 設定頁（整頁，與主頁在同一視窗內切換）：時長、音量、開機啟動、管理員狀態、封鎖網站清單
+  - `setup_page.py` 設定頁（整頁，與主頁在同一視窗內切換，左右兩欄）：時長、音量、快捷鍵說明（`SHORTCUTS`）、
+    開機啟動、管理員狀態、封鎖網站清單。**主頁只留計時操作，所有設定與說明文字都放這裡。**
   - `history_chart.py` 時間統計子視窗（摘要卡 + 每小時堆疊長條圖；matplotlib 圖的底色要取卡片色 `BG_GLASS_SOLID`，否則會看到色塊）
 
 ## 資產
@@ -59,7 +60,7 @@ CSV 格式：`utf-8-sig`，欄位 `時間戳記,活動類型,持續時間`。
 - `logical_date_of(moment)`：某個時間點屬於哪個邏輯日（00:00~03:59 算**前一天**）。
 - `get_logical_date()`：現在屬於哪個邏輯日。
 - `logical_day_window(date)` / `format_logical_day_window(date)`：邏輯日的起迄時間與顯示字串
-  （例如 `01-10 04:00 → 01-11 04:00`）。UI 一律顯示這個區間，不要寫含糊的「今日」。
+  （例如 `01-10 04:00 → 01-11 04:00`）。凡是要顯示「哪一天」的地方（目前是統計視窗標題）一律顯示這個區間，不要寫含糊的「今日」。
 
 `history_chart` 把每筆紀錄**裁切**進 `[04:00, 隔天 04:00)` 之後才分桶，所以跨 04:00 的紀錄
 會依實際時間切給前後兩個邏輯日（各看見自己那一段）。X 軸也照邏輯日順序排，從 04:00 走到
@@ -79,9 +80,8 @@ CSV 格式：`utf-8-sig`，欄位 `時間戳記,活動類型,持續時間`。
    跟這個 venv（20 包）無關，連 `accelerate` 都沒裝。實際第三方依賴只有
    `customtkinter`、`matplotlib`、`numpy`，另外 `Pillow`（圓環繪製；matplotlib 與 customtkinter 已會帶進來）。
 5. 改 `MODE_CFG` 的鍵名時，別漏掉 `history_chart.py` 裡「活動名稱 → 顏色」的對應。
-6. 封鎖網站要管理員權限：`hosts_blocker.apply_block()` 非管理員直接回 False。**UI 不跳詢問視窗**：
-   主頁只在「有封鎖清單且沒權限」時顯示一條提示列（`admin_banner`），點了進設定頁，
-   由設定頁的「以管理員身分重新啟動」按鈕處理。錯誤與回饋一律顯示在設定頁內（`show_message`），不用 messagebox。
+6. 封鎖網站要管理員權限：`hosts_blocker.apply_block()` 非管理員直接回 False。**UI 不跳詢問視窗，主頁也不放權限提示**：
+   沒權限時封鎖直接略過；狀態與「以管理員身分重新啟動」按鈕都在設定頁。錯誤與回饋一律顯示在設定頁內（`show_message`），不用 messagebox。
    只有「時間到」的繼續／切換選擇與存檔失敗仍用 messagebox；
    它會改 `C:\Windows\System32\drivers\etc\hosts` 並執行 `ipconfig /flushdns`。
 7. **日期歸屬一律走邏輯日。** 時間戳記存的是實體時間（寫入時 `datetime.now()`），但「算哪一天」
@@ -92,14 +92,19 @@ CSV 格式：`utf-8-sig`，欄位 `時間戳記,活動類型,持續時間`。
    所以 `apply_window_icon()` 用 `after(350)`；直接在建構時 `iconbitmap` 會被蓋回藍色預設圖示。
 9. **主頁全部可用鍵盤操作，快捷鍵集中在 `main_window._on_key`（綁在 root 的 `<Key>`）。**
    空白鍵 開始／暫停、R 重置、←/1 專注、→/2 休息、S 設定、T 統計、P 釘選、M 迷你模式；Esc 離開設定頁／迷你模式。
-   快捷鍵綁在整個視窗，設定頁有輸入框，所以 `_in_setup` 時只處理 Esc，否則打字會誤觸計時。新增主頁功能請同步加快捷鍵與底部提示文字。
-10. **最小化一律進迷你模式（不需要釘選）。** `<Unmap>` 永遠綁定；迷你視窗自己會置頂，離開後才依釘選狀態決定。
+   快捷鍵綁在整個視窗，設定頁有輸入框，所以 `_in_setup` 時只處理 Esc，否則打字會誤觸計時。新增或更動快捷鍵請同步 `setup_page.SHORTCUTS`（說明只放設定頁，主頁不放提示文字）。
+10. **圖示按鈕的 customtkinter 陷阱。** `CTkButton` 帶圖示時，左右會各留「圓角半徑」寬的內距，圓角大就被撐寬，
+   做不出正圓；而且 `configure(image=...)` 不會重畫，圖示標籤要等重畫才建立（第一次要 `require_redraw=True`）。
+   所以主頁的播放／暫停與重置用 `RoundIconButton`：整顆圓用 Pillow 畫成圖片，圓角為 0、滑過時換圖；
+   自訂 CTkButton 子類時，不要用 `_image`、`_hover`、`_size` 這類 CTkButton 內部已有的屬性名。
+   播放／暫停是同一顆按鈕，由 `_refresh_primary()` 依 `engine.is_running` 換圖示與顏色；任何改變計時狀態的地方都要呼叫它。
+11. **最小化一律進迷你模式（不需要釘選）。** `<Unmap>` 永遠綁定；迷你視窗自己會置頂，離開後才依釘選狀態決定。
    進出迷你模式必須同步改 `minsize`，否則視窗縮不下去。
    迷你模式的底色要鋪滿整個視窗：`_paint_mini` 把框（無圓角）、root 底色與標題列（`win11_effects.set_caption_colors`，Win11 才有效）都換成模式色，離開時 `_unpaint_mini` 還原。
    DWM 在視窗剛調整大小時會忽略標題列設定，所以 `_paint_mini` 會延遲再套一次。
    **改視窗大小本身會觸發 `<Unmap>`**，所以一律走 `_set_window_size()`（先解除綁定、300ms 後再綁回），
    否則換頁時會被誤判成最小化而跳進迷你模式。主頁與設定頁高度不同（`MAIN_/SETUP_WINDOW_SIZE`），換頁時會調整。
-11. **打包版啟動時 `main.py` 會 `chdir` 到 exe 所在資料夾。** 紀錄檔、`blocked_sites.json`、
+12. **打包版啟動時 `main.py` 會 `chdir` 到 exe 所在資料夾。** 紀錄檔、`blocked_sites.json`、
    `settings.json` 都用相對路徑；開機自動啟動時工作目錄不是 exe 資料夾，不切過去就會寫到別處。
 
 ## 指令
