@@ -292,6 +292,8 @@ class PomodoroApp:
         self.mini.configure(fg_color=T.MODE_CFG[self._mode_key()]["color"])
         w, h = MINI_WINDOW_SIZE
         self.root.resizable(True, True)
+        # 主視窗啟動時設了 minsize，不先放寬的話 geometry 縮不下去
+        self.root.minsize(w, h)
         self.root.geometry(f"{w}x{h}")
         self.root.resizable(False, False)
         self.main.grid_remove()
@@ -304,6 +306,7 @@ class PomodoroApp:
         self.main.grid()
         w, h = MAIN_WINDOW_SIZE
         self.root.resizable(True, True)
+        self.root.minsize(w, h)
         self.root.geometry(f"{w}x{h}")
         self.root.resizable(False, False)
         if self.always_on_top:
