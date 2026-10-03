@@ -24,7 +24,7 @@ v2.0 已把原本的單檔 `pomodoro_window.py` 拆成 `pomodoro/` 套件，分�
     （GlowRing 的環用 Pillow 超取樣繪成圖片放在 Canvas 底層以消除鋸齒，文字仍是 Canvas 文字）
   - `icons.py` 用 Pillow 畫的單色圖示組（`icon(name, size, color)`）、App 標誌、`apply_window_icon()`
   - `setup_page.py` 設定頁（整頁，與主頁在同一視窗內切換）：時長、音量、開機啟動、管理員狀態、封鎖網站清單
-  - `history_chart.py` 時間統計子視窗
+  - `history_chart.py` 時間統計子視窗（摘要卡 + 每小時堆疊長條圖；matplotlib 圖的底色要取卡片色 `BG_GLASS_SOLID`，否則會看到色塊）
 
 ## 資產
 
@@ -95,6 +95,8 @@ CSV 格式：`utf-8-sig`，欄位 `時間戳記,活動類型,持續時間`。
    快捷鍵綁在整個視窗，設定頁有輸入框，所以 `_in_setup` 時只處理 Esc，否則打字會誤觸計時。新增主頁功能請同步加快捷鍵與底部提示文字。
 10. **最小化一律進迷你模式（不需要釘選）。** `<Unmap>` 永遠綁定；迷你視窗自己會置頂，離開後才依釘選狀態決定。
    進出迷你模式必須同步改 `minsize`，否則視窗縮不下去。
+   迷你模式的底色要鋪滿整個視窗：`_paint_mini` 把框（無圓角）、root 底色與標題列（`win11_effects.set_caption_colors`，Win11 才有效）都換成模式色，離開時 `_unpaint_mini` 還原。
+   DWM 在視窗剛調整大小時會忽略標題列設定，所以 `_paint_mini` 會延遲再套一次。
    **改視窗大小本身會觸發 `<Unmap>`**，所以一律走 `_set_window_size()`（先解除綁定、300ms 後再綁回），
    否則換頁時會被誤判成最小化而跳進迷你模式。主頁與設定頁高度不同（`MAIN_/SETUP_WINDOW_SIZE`），換頁時會調整。
 11. **打包版啟動時 `main.py` 會 `chdir` 到 exe 所在資料夾。** 紀錄檔、`blocked_sites.json`、

@@ -73,6 +73,9 @@ def open_history_chart(parent) -> None:
         _fill_hour_buckets(seg_start, seg_end, bucket)
         totals[act] += (seg_end - seg_start).total_seconds()
 
+    focus_sec = totals["專注"] + totals["超時專注"]
+    break_sec = totals["休息"] + totals["超時休息"]
+
     win = ctk.CTkToplevel(parent)
     win.title(f"時間統計 · {range_text}")
     IC.apply_window_icon(win)
@@ -81,107 +84,179 @@ def open_history_chart(parent) -> None:
     win.configure(fg_color=T.BG_PRIMARY)
     win.grab_set()
     win.focus_force()
+    win.bind("<Escape>", lambda e: close())
 
     is_dark = ctk.get_appearance_mode() == "Dark"
-    bg = T.BG_PRIMARY[1] if is_dark else T.BG_PRIMARY[0]
-    text_color = T.TEXT_PRIMARY[1] if is_dark else T.TEXT_PRIMARY[0]
-    grid_color = T.DIVIDER[1] if is_dark else T.DIVIDER[0]
 
-    COLOR = {
-        "專注": T.MODE_CFG["work"]["color"],
-        "超時專注": T.MODE_CFG["overtime_work"]["color"],
-        "休息": T.MODE_CFG["break"]["color"],
-        "超時休息": T.MODE_CFG["overtime_break"]["color"],
-    }
+    def pick(pair):
+        return pair[1] if is_dark else pair[0]
 
-    # ── 統計卡 ──
-    stats = GlassCard(win)
-    stats.pack(fill="x", padx=20, pady=(18, 10))
+    card_bg = pick(T.BG_GLASS_SOLID)
+    text_color = pick(T.TEXT_PRIMARY)
+    muted = pick(T.TEXT_MUTED)
+    grid_color = pick(T.DIVIDER)
+    work_color = T.MODE_CFG["work"]["color"]
+    break_color = T.MODE_CFG["break"]["color"]
 
-    stats_inner = ctk.CTkFrame(stats, fg_color="transparent")
-    stats_inner.pack(pady=12, padx=12)
+    # ── 標題列 ──
+    head_row = ctk.CTkFrame(win, fg_color="transparent")
+    head_row.pack(fill="x", padx=24, pady=(20, 0))
+    ctk.CTkLabel(
+        head_row, text="時間統計", font=(T.FONT_FAMILY_UI, 20, "bold"),
+        text_color=T.TEXT_PRIMARY,
+    ).pack(side="left")
+    ctk.CTkLabel(
+        head_row, text=range_text, font=(T.FONT_FAMILY_UI, 12),
+        text_color=T.TEXT_MUTED,
+    ).pack(side="left", padx=14, pady=(5, 0))
+    ctk.CTkLabel(
+        head_row, text="Esc 關閉", font=(T.FONT_FAMILY_UI, 11),
+        text_color=T.TEXT_MUTED,
+    ).pack(side="right", pady=(5, 0))
 
-    if any(v > 0 for v in totals.values()):
-        for act in ACTS:
-            if totals[act] <= 0:
-                continue
-            chip = ctk.CTkFrame(stats_inner, fg_color=COLOR[act], corner_radius=12)
-            chip.pack(side="left", padx=6, pady=2)
-            ctk.CTkLabel(
-                chip,
-                text=f"  {act}  ·  {CL.format_duration_human(totals[act])}  ",
-                font=(T.FONT_FAMILY_UI, 12, "bold"),
-                text_color=T.ON_ACCENT,
-            ).pack(padx=4, pady=6)
-    else:
+    # ── 摘要卡 ──
+    work_arr = np.array(work_min, dtype=float)
+    break_arr = np.array(break_min, dtype=float)
+    peak_idx = int(np.argmax(work_arr)) if work_arr.max() > 0 else -1
+    peak_clock = (peak_idx + LOGICAL_DAY_RESET_HOUR) % 24
+
+    def kpi(col: int, title: str, value: str, sub: str, color: str) -> None:
+        card = GlassCard(kpi_row)
+        card.grid(row=0, column=col, sticky="nsew", padx=5)
         ctk.CTkLabel(
-            stats_inner,
-            text="這個區間沒有任何紀錄",
-            font=(T.FONT_FAMILY_UI, 12),
-            text_color=T.TEXT_MUTED,
-        ).pack(padx=8, pady=6)
+            card, text=f" {title}", compound="left", image=IC.icon("dot", 10, color),
+            font=(T.FONT_FAMILY_UI, 11, "bold"), text_color=T.TEXT_MUTED, anchor="w",
+        ).pack(fill="x", padx=14, pady=(10, 0))
+        ctk.CTkLabel(
+            card, text=value, font=(T.FONT_FAMILY_DIGIT, 24, "bold"),
+            text_color=T.TEXT_PRIMARY, anchor="w",
+        ).pack(fill="x", padx=14)
+        ctk.CTkLabel(
+            card, text=sub, font=(T.FONT_FAMILY_UI, 11),
+            text_color=T.TEXT_MUTED, anchor="w",
+        ).pack(fill="x", padx=14, pady=(0, 10))
+
+    kpi_row = ctk.CTkFrame(win, fg_color="transparent")
+    kpi_row.pack(fill="x", padx=19, pady=(14, 10))
+    kpi_row.grid_columnconfigure((0, 1, 2, 3), weight=1, uniform="kpi")
+
+    ot_work, ot_break = totals["超時專注"], totals["超時休息"]
+    kpi(0, "專注時間", CL.format_duration_human(focus_sec),
+        f"含超時 {CL.format_duration_human(ot_work)}" if ot_work > 0 else "沒有超時", work_color)
+    kpi(1, "休息時間", CL.format_duration_human(break_sec),
+        f"含超時 {CL.format_duration_human(ot_break)}" if ot_break > 0 else "沒有超時", break_color)
+    kpi(2, "完成次數", f"{CL.count_today_focus()} 次", "完成的專注段落", T.MODE_CFG["overtime_work"]["color"])
+    if peak_idx >= 0:
+        kpi(3, "最專注時段", f"{peak_clock:02d}:00",
+            f"{peak_clock:02d}:00–{(peak_clock + 1) % 24:02d}:00 · 專注 {int(round(work_arr[peak_idx]))} 分",
+            T.MODE_CFG["overtime_break"]["color"])
+    else:
+        kpi(3, "最專注時段", "—", "這個區間還沒有專注紀錄", T.MODE_CFG["overtime_break"]["color"])
 
     # ── 圖表 ──
     chart_card = GlassCard(win)
-    chart_card.pack(fill="both", expand=True, padx=20, pady=(0, 18))
+    chart_card.pack(fill="both", expand=True, padx=24, pady=(0, 20))
 
-    fig, ax = plt.subplots(figsize=(10, 4.0), facecolor=bg)
-    ax.set_facecolor(bg)
+    fig, ax = plt.subplots(figsize=(10, 4.0), facecolor=card_bg)
+    ax.set_facecolor(card_bg)
 
     hours = np.arange(HOURS)
-    work_arr = np.array(work_min, dtype=float)
-    break_arr = np.array(break_min, dtype=float)
     # 一小時最多 60 分鐘；夾住避免異常資料爆表
     excess = np.clip(work_arr + break_arr - Y_MAX_MINUTES, 0, None)
     work_arr = np.clip(work_arr - excess, 0, None)
     break_arr = np.clip(break_arr, 0, Y_MAX_MINUTES - work_arr)
+    total_arr = work_arr + break_arr
 
-    ax.bar(hours, work_arr, width=0.68,
-           color=T.MODE_CFG["work"]["color"], label="工作", zorder=3)
-    ax.bar(hours, break_arr, width=0.68, bottom=work_arr,
-           color=T.MODE_CFG["break"]["color"], label="休息", zorder=3)
+    # 現在所在的小時（只在檢視目前這個邏輯日時標示）
+    now = datetime.now()
+    if day_start <= now < day_end:
+        ax.axvspan(_axis_hour(now) - 0.5, _axis_hour(now) + 0.5,
+                   color=text_color, alpha=0.07, linewidth=0, zorder=0)
+        ax.text(_axis_hour(now), Y_MAX_MINUTES * 1.012, "現在", ha="center", va="bottom",
+                fontsize=8, color=muted)
+
+    ax.bar(hours, work_arr, width=0.62, color=work_color, label="專注", zorder=3)
+    ax.bar(hours, break_arr, width=0.62, bottom=work_arr, color=break_color, label="休息", zorder=3)
+
+    # 每根柱子上方標出該小時總分鐘數，不必對著刻度估
+    for i in hours:
+        if total_arr[i] >= 3:
+            ax.text(i, total_arr[i] + 1.2, f"{int(round(total_arr[i]))}", ha="center", va="bottom",
+                    fontsize=8, color=muted, zorder=4)
+
+    if not total_arr.any():
+        ax.text(0.5, 0.5, "這個區間沒有任何紀錄", transform=ax.transAxes, ha="center", va="center",
+                fontsize=13, color=muted)
 
     ax.set_xlim(-0.7, HOURS - 0.3)
     ax.set_ylim(0, Y_MAX_MINUTES)
 
-    y_ticks = np.arange(0, Y_MAX_MINUTES + 1, 10)
+    y_ticks = np.arange(0, Y_MAX_MINUTES + 1, 15)
     # X 軸刻度是邏輯日順序，換算回時鐘時間：位置 0 → 04 時、位置 20 → 00 時
     ax.set_xticks(hours)
     ax.set_xticklabels([f"{(int(h) + LOGICAL_DAY_RESET_HOUR) % 24:02d}" for h in hours],
-                       color=text_color, fontsize=9)
+                       color=muted, fontsize=9)
     ax.set_yticks(y_ticks)
-    ax.set_yticklabels([f"{int(v)}" for v in y_ticks], color=text_color, fontsize=9)
-
-    ax.set_xlabel(
-        f"時間（{LOGICAL_DAY_RESET_HOUR:02d}:00 → 隔日 {LOGICAL_DAY_RESET_HOUR:02d}:00）",
-        color=text_color, fontsize=11,
-    )
-    ax.set_ylabel("分鐘", color=text_color, fontsize=11)
-    ax.set_title("每小時工作 / 休息分鐘數", color=text_color, fontsize=13, pad=26)
+    ax.set_yticklabels([f"{int(v)}" for v in y_ticks], color=muted, fontsize=9)
+    ax.set_ylabel("每小時分鐘數", color=muted, fontsize=10, labelpad=8)
 
     ax.set_axisbelow(True)
-    ax.yaxis.grid(True, color=grid_color, linewidth=0.8, zorder=0)
+    ax.yaxis.grid(True, color=grid_color, linewidth=0.8, linestyle=(0, (3, 3)), zorder=0)
     for spine in ("top", "left", "right"):
         ax.spines[spine].set_color("none")
     ax.spines["bottom"].set_color(grid_color)
-    ax.tick_params(colors=text_color)
+    ax.tick_params(length=0)
 
     # 標出跨越午夜的界線，否則 X 軸 23 → 00 會突然跳掉
-    ax.axvline((24 - LOGICAL_DAY_RESET_HOUR) - 0.5, color=text_color,
-               linewidth=0.9, linestyle=":", alpha=0.45, zorder=1)
+    ax.axvline((24 - LOGICAL_DAY_RESET_HOUR) - 0.5, color=muted,
+               linewidth=0.9, linestyle=":", alpha=0.6, zorder=1)
+    ax.text((24 - LOGICAL_DAY_RESET_HOUR) - 0.4, Y_MAX_MINUTES * 0.97, "隔日", ha="left", va="top",
+            fontsize=8, color=muted)
 
-    # 圖例放在繪圖區上方，避免蓋到高柱
+    # 圖例放在右上方，不蓋到柱子
     legend = ax.legend(
-        loc="lower left", bbox_to_anchor=(0.0, 1.01), ncol=2,
+        loc="lower right", bbox_to_anchor=(1.0, 1.03), ncol=2,
         frameon=False, fontsize=10, labelcolor=text_color,
-        handlelength=1.4, columnspacing=1.6, borderpad=0.2,
+        handlelength=1.0, handleheight=1.0, columnspacing=1.4, borderpad=0.2,
     )
     legend.set_zorder(5)
 
-    plt.tight_layout()
+    # 滑鼠移到柱子上顯示該小時明細
+    tip = ax.annotate(
+        "", xy=(0, 0), xytext=(0, 14), textcoords="offset points", ha="center", va="bottom",
+        fontsize=9, color=text_color, zorder=10, annotation_clip=False,
+        bbox=dict(boxstyle="round,pad=0.55", fc=pick(T.BG_GLASS_HOVER), ec=grid_color, lw=0.8),
+    )
+    tip.set_visible(False)
+    last = {"i": None}
+
+    def on_move(ev) -> None:
+        i = int(round(ev.xdata)) if (ev.inaxes is ax and ev.xdata is not None) else None
+        if i is not None and not (0 <= i < HOURS and total_arr[i] > 0):
+            i = None
+        if i == last["i"]:
+            return
+        last["i"] = i
+        if i is None:
+            tip.set_visible(False)
+        else:
+            clock = (i + LOGICAL_DAY_RESET_HOUR) % 24
+            tip.xy = (i, total_arr[i])
+            tip.set_text(f"{clock:02d}:00–{(clock + 1) % 24:02d}:00\n"
+                         f"專注 {int(round(work_arr[i]))} 分　休息 {int(round(break_arr[i]))} 分")
+            tip.set_visible(True)
+        canvas.draw_idle()
+
+    fig.tight_layout(pad=1.2)
 
     canvas = FigureCanvasTkAgg(fig, master=chart_card)
     canvas.draw()
-    canvas.get_tk_widget().pack(fill="both", expand=True, padx=10, pady=10)
+    canvas.get_tk_widget().configure(bg=card_bg, highlightthickness=0)
+    canvas.get_tk_widget().pack(fill="both", expand=True, padx=8, pady=8)
+    fig.canvas.mpl_connect("motion_notify_event", on_move)
 
-    win.protocol("WM_DELETE_WINDOW", lambda: (plt.close(fig), win.destroy()))
+    def close() -> None:
+        plt.close(fig)
+        win.destroy()
+
+    win.protocol("WM_DELETE_WINDOW", close)

@@ -303,7 +303,7 @@ class PomodoroApp:
         self.mini = ctk.CTkFrame(
             self.root,
             fg_color=T.MODE_CFG["work"]["color"],
-            corner_radius=18,
+            corner_radius=0,
         )
         self.mini.grid(row=0, column=0, sticky="nsew")
         self.mini.grid_remove()
@@ -322,7 +322,7 @@ class PomodoroApp:
         self.root.deiconify()
         self._is_mini = True
         self._mini_label.configure(text=self.ring.itemcget(self.ring._time_id, "text"))  # noqa
-        self.mini.configure(fg_color=T.MODE_CFG[self._mode_key()]["color"])
+        self._paint_mini(T.MODE_CFG[self._mode_key()]["color"])
         w, h = MINI_WINDOW_SIZE
         self.root.resizable(True, True)
         # 主視窗啟動時設了 minsize，不先放寬的話 geometry 縮不下去
@@ -336,6 +336,7 @@ class PomodoroApp:
 
     def _exit_mini(self) -> None:
         self._is_mini = False
+        self._unpaint_mini()
         self.root.unbind("<Unmap>")
         self.mini.grid_remove()
         if self._in_setup:
@@ -345,6 +346,19 @@ class PomodoroApp:
         self._set_window_size(SETUP_WINDOW_SIZE if self._in_setup else MAIN_WINDOW_SIZE)
         self.root.attributes("-topmost", self.always_on_top)
         self.root.after(300, lambda: self.root.bind("<Unmap>", self._on_unmap))
+
+    def _paint_mini(self, color: str) -> None:
+        """迷你模式：框、視窗底色與標題列都換成模式色，讓顏色鋪滿整個視窗。"""
+        self.mini.configure(fg_color=color)
+        self.root.configure(fg_color=color)
+        W11.set_caption_colors(self.root, color, "#FFFFFF")
+        # 剛進入迷你模式、視窗還在調整大小時 DWM 會忽略設定，稍後再套一次
+        self.root.after(150, lambda: self._is_mini and W11.set_caption_colors(
+            self.root, T.MODE_CFG[self._mode_key()]["color"], "#FFFFFF"))
+
+    def _unpaint_mini(self) -> None:
+        self.root.configure(fg_color=T.BG_PRIMARY)
+        W11.set_caption_colors(self.root, None, None)
 
     def _on_unmap(self, event) -> None:
         if event.widget is self.root and not self._is_mini:
@@ -450,7 +464,7 @@ class PomodoroApp:
             selected_color=cfg["color"], selected_hover_color=cfg["hover"],
         )
         if self._is_mini:
-            self.mini.configure(fg_color=cfg["color"])
+            self._paint_mini(cfg["color"])
 
     # ======================================================================
     # 計時控制
