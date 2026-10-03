@@ -31,4 +31,5 @@ Thumbs.db
 build/
 dist/
 
-.csv
+# --- 專注紀錄（個人資料）---
+*.csv
