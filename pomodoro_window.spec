@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_all, collect_submodules
 
-datas = []
+datas = [('assets/app.ico', 'assets'), ('assets/app.png', 'assets')]
 binaries = []
 hiddenimports = []
 
@@ -32,8 +32,12 @@ hiddenimports += [
     'pomodoro.core.csv_logger',
     'pomodoro.core.hosts_blocker',
     'pomodoro.core.win11_effects',
+    'pomodoro.core.alarm',
+    'pomodoro.core.settings',
+    'pomodoro.core.startup',
     'pomodoro.ui',
     'pomodoro.ui.widgets',
+    'pomodoro.ui.icons',
     'pomodoro.ui.main_window',
     'pomodoro.ui.history_chart',
     'pomodoro.ui.blocked_sites_window',
@@ -73,4 +77,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon='assets/app.ico',
 )

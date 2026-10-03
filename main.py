@@ -13,6 +13,12 @@ def main() -> None:
     # 開機自動啟動時工作目錄不是 exe 所在處；紀錄檔與設定檔都用相對路徑，要先切過去
     if getattr(sys, "frozen", False):
         os.chdir(os.path.dirname(sys.executable))
+    # 明確指定 AppUserModelID，工作列才會用視窗圖示、不跟 python.exe 歸為同一組
+    try:
+        import ctypes
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("johnson.pomodoro.timer")
+    except Exception:
+        pass
     app = PomodoroApp()
     app.run()
 

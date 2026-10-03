@@ -23,6 +23,7 @@ from ..core import settings as ST
 from ..core import startup as SU
 from ..core import win11_effects as W11
 from ..core.timer_engine import TimerEngine
+from . import icons as IC
 from .blocked_sites_window import open_blocked_sites_window
 from .history_chart import open_history_chart
 from .widgets import GhostButton, GlassCard, GlowRing, MinutesEntry, PillButton, StatusBadge
@@ -36,7 +37,8 @@ class PomodoroApp:
         ctk.set_default_color_theme("blue")
 
         self.root = ctk.CTk()
-        self.root.title("🍅 番茄工作計時器")
+        self.root.title("番茄工作計時器")
+        IC.apply_window_icon(self.root)
         w, h = MAIN_WINDOW_SIZE
         self.root.geometry(f"{w}x{h}")
         self.root.minsize(w, h)
@@ -74,6 +76,7 @@ class PomodoroApp:
         self._apply_glass_effect()
 
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
+        self.root.bind("<Unmap>", self._on_unmap)
         self._bind_shortcuts()
         self._update_count_label()
 
@@ -94,7 +97,8 @@ class PomodoroApp:
         self.status_badge.grid(row=0, column=0, sticky="w")
 
         self.btn_pin = ctk.CTkButton(
-            top, text="📌", width=36, height=32,
+            top, text="", width=36, height=32,
+            image=IC.icon("pin", 16, T.TEXT_SECONDARY),
             font=(T.FONT_FAMILY_UI, 14),
             fg_color="transparent", border_width=1,
             border_color=T.BORDER_GLASS, text_color=T.TEXT_SECONDARY,
@@ -118,7 +122,8 @@ class PomodoroApp:
         lbl_font = (T.FONT_FAMILY_UI, 12, "bold")
 
         ctk.CTkLabel(
-            inner, text=f"{T.MODE_CFG['work']['icon']} 專注",
+            inner, text=" 專注", compound="left",
+            image=IC.icon("dot", 12, T.MODE_CFG["work"]["color"]),
             font=lbl_font, text_color=T.MODE_CFG["work"]["color"],
         ).pack(side="left", padx=(2, 6))
         self.work_entry = MinutesEntry(inner, default=DEFAULT_WORK_MINUTES)
@@ -127,7 +132,8 @@ class PomodoroApp:
                      text_color=T.TEXT_SECONDARY).pack(side="left", padx=(0, 22))
 
         ctk.CTkLabel(
-            inner, text=f"{T.MODE_CFG['break']['icon']} 休息",
+            inner, text=" 休息", compound="left",
+            image=IC.icon("dot", 12, T.MODE_CFG["break"]["color"]),
             font=lbl_font, text_color=T.MODE_CFG["break"]["color"],
         ).pack(side="left", padx=(2, 6))
         self.break_entry = MinutesEntry(inner, default=DEFAULT_BREAK_MINUTES)
@@ -136,10 +142,7 @@ class PomodoroApp:
                      text_color=T.TEXT_SECONDARY).pack(side="left")
 
         # ── 模式切換 ──
-        seg_values = [
-            f"{T.MODE_CFG['work']['icon']} 專注",
-            f"{T.MODE_CFG['break']['icon']} 休息",
-        ]
+        seg_values = ["專注", "休息"]
         self.mode_selector = ctk.CTkSegmentedButton(
             self.main,
             values=seg_values,
@@ -164,7 +167,7 @@ class PomodoroApp:
 
         # 主次分明：「開始」最寬、最醒目；「暫停」次之；「重置」只留外框，避免與主動作搶焦點
         self.btn_start = PillButton(
-            btn_row, text="▶  開始",
+            btn_row, text="開始", icon="play", icon_size=18,
             color=T.MODE_CFG["work"]["color"],
             hover=T.MODE_CFG["work"]["hover"],
             text_color=T.ON_ACCENT,
@@ -173,7 +176,7 @@ class PomodoroApp:
         self.btn_start.pack(side="left", padx=5)
 
         self.btn_pause = PillButton(
-            btn_row, text="⏸  暫停",
+            btn_row, text="暫停", icon="pause", icon_size=18,
             color=T.DISABLED_BG, hover="#C97900",
             text_color=T.ON_AMBER,
             command=self.pause_timer, width=104, height=46,
@@ -182,7 +185,8 @@ class PomodoroApp:
         self.btn_pause.pack(side="left", padx=5)
 
         self.btn_reset = GhostButton(
-            btn_row, text="↺  重置", width=92, height=46, corner_radius=23,
+            btn_row, text="重置", icon="reset", icon_size=18,
+            width=92, height=46, corner_radius=23,
             text_color=T.TEXT_SECONDARY,
             hover_color=("#FBE3E3", "#3A1A1E"),
             command=self.reset_timer,
@@ -191,7 +195,8 @@ class PomodoroApp:
 
         # ── 計數：主資訊（完成次數）與輔助資訊（邏輯日區間）分兩行 ──
         self.count_label = ctk.CTkLabel(
-            self.main, text="🍅 完成 0 次專注",
+            self.main, text=" 完成 0 次專注",
+            image=IC.logo(20), compound="left",
             font=(T.FONT_FAMILY_UI, 14, "bold"),
             text_color=T.TEXT_PRIMARY,
         )
@@ -209,12 +214,12 @@ class PomodoroApp:
         action_col.grid_columnconfigure((0, 1), weight=1, uniform="act")
 
         GhostButton(
-            action_col, text="📊  時間統計",
+            action_col, text="時間統計", icon="chart", icon_size=18,
             command=lambda: open_history_chart(self.root),
         ).grid(row=0, column=0, sticky="ew", padx=(0, 4))
 
         GhostButton(
-            action_col, text="🚫  封鎖網站",
+            action_col, text="封鎖網站", icon="block", icon_size=18,
             command=self._open_blocked,
         ).grid(row=0, column=1, sticky="ew", padx=(4, 0))
 
@@ -226,7 +231,9 @@ class PomodoroApp:
         vol_row = ctk.CTkFrame(prefs, fg_color="transparent")
         vol_row.grid(row=0, column=0, sticky="ew", padx=14, pady=(10, 0))
         vol_row.grid_columnconfigure(1, weight=1)
-        ctk.CTkLabel(vol_row, text="🔔 鬧鐘音量", font=(T.FONT_FAMILY_UI, 12),
+        ctk.CTkLabel(vol_row, text=" 鬧鐘音量", compound="left",
+                     image=IC.icon("bell", 16, T.TEXT_SECONDARY),
+                     font=(T.FONT_FAMILY_UI, 12),
                      text_color=T.TEXT_SECONDARY).grid(row=0, column=0, padx=(0, 12))
         self.volume_slider = ctk.CTkSlider(
             vol_row, from_=0, to=100, number_of_steps=20,
@@ -296,6 +303,7 @@ class PomodoroApp:
         self.root.minsize(w, h)
         self.root.geometry(f"{w}x{h}")
         self.root.resizable(False, False)
+        self.root.attributes("-topmost", True)  # 迷你視窗一律浮在最上層才有用
         self.main.grid_remove()
         self.mini.grid()
 
@@ -309,11 +317,11 @@ class PomodoroApp:
         self.root.minsize(w, h)
         self.root.geometry(f"{w}x{h}")
         self.root.resizable(False, False)
-        if self.always_on_top:
-            self.root.after(300, lambda: self.root.bind("<Unmap>", self._on_unmap))
+        self.root.attributes("-topmost", self.always_on_top)
+        self.root.after(300, lambda: self.root.bind("<Unmap>", self._on_unmap))
 
     def _on_unmap(self, event) -> None:
-        if event.widget is self.root and self.always_on_top and not self._is_mini:
+        if event.widget is self.root and not self._is_mini:
             self.root.after(1, self._enter_mini)
 
     # ======================================================================
@@ -329,9 +337,7 @@ class PomodoroApp:
     # 模式切換
     # ======================================================================
     def _seg_value_for(self, mode: str) -> str:
-        if mode == "work":
-            return f"{T.MODE_CFG['work']['icon']} 專注"
-        return f"{T.MODE_CFG['break']['icon']} 休息"
+        return "專注" if mode == "work" else "休息"
 
     def _on_mode_segment(self, value: str) -> None:
         new_mode = "work" if "專注" in value else "break"
@@ -404,8 +410,8 @@ class PomodoroApp:
 
     def _apply_mode_ui(self, key: str) -> None:
         cfg = T.MODE_CFG[key]
-        label = f"{cfg['icon']}  {cfg['name']}"
-        self.status_badge.set_mode(label, cfg["badge_light"], cfg["badge_dark"])
+        self.status_badge.set_mode(cfg["name"], cfg["badge_light"], cfg["badge_dark"],
+                                   dot_color=cfg["color"])
         self.ring.set_color(cfg["color"])
         self.ring.set_sub(self._state_text())
 
@@ -442,8 +448,8 @@ class PomodoroApp:
         self.engine.pause()
         cfg = T.MODE_CFG[self._mode_key()]
         self.btn_start.configure(state="normal", fg_color=cfg["color"],
-                                  hover_color=cfg["hover"], text="▶  繼續")
-        self.btn_pause.configure(state="disabled", fg_color=T.DISABLED_BG, text="⏸  暫停")
+                                  hover_color=cfg["hover"], text="繼續")
+        self.btn_pause.configure(state="disabled", fg_color=T.DISABLED_BG, text="暫停")
         self.ring.set_sub(self._state_text())
 
     def reset_timer(self) -> None:
@@ -526,16 +532,16 @@ class PomodoroApp:
     # UI 狀態切換
     # ======================================================================
     def _set_buttons_running(self) -> None:
-        self.btn_start.configure(state="disabled", fg_color=T.DISABLED_BG, text="▶  開始")
+        self.btn_start.configure(state="disabled", fg_color=T.DISABLED_BG, text="開始")
         self.btn_pause.configure(state="normal", fg_color=T.PAUSE_COLOR,
-                                  hover_color="#C97900", text="⏸  暫停")
+                                  hover_color="#C97900", text="暫停")
 
     def _set_buttons_idle(self) -> None:
         cfg = T.MODE_CFG[self._mode_key()]
         self.btn_start.configure(state="normal", fg_color=cfg["color"],
-                                  hover_color=cfg["hover"], text="▶  開始")
+                                  hover_color=cfg["hover"], text="開始")
         self.btn_pause.configure(state="disabled", fg_color=T.DISABLED_BG,
-                                  text="⏸  暫停")
+                                  text="暫停")
 
     # ======================================================================
     # 設定 / 紀錄
@@ -568,7 +574,7 @@ class PomodoroApp:
     def _update_count_label(self) -> None:
         # 顯示邏輯日的實際區間，而不是含糊的「今日」（凌晨 0~4 點算前一天）
         span = CL.format_logical_day_window(CL.get_logical_date())
-        self.count_label.configure(text=f"🍅 完成 {self.work_count} 次專注")
+        self.count_label.configure(text=f" 完成 {self.work_count} 次專注")
         self.day_label.configure(text=span)
 
     # ======================================================================
@@ -603,19 +609,15 @@ class PomodoroApp:
         if self.always_on_top:
             self.btn_pin.configure(
                 fg_color=T.MODE_CFG["break"]["color"],
-                text_color="white",
+                image=IC.icon("pin", 16, "#FFFFFF"),
                 border_color=T.MODE_CFG["break"]["color"],
             )
-            self.root.bind("<Unmap>", self._on_unmap)
         else:
             self.btn_pin.configure(
                 fg_color="transparent",
-                text_color=T.TEXT_SECONDARY,
+                image=IC.icon("pin", 16, T.TEXT_SECONDARY),
                 border_color=T.BORDER_GLASS,
             )
-            self.root.unbind("<Unmap>")
-            if self._is_mini:
-                self._exit_mini()
 
     # ======================================================================
     # 鍵盤

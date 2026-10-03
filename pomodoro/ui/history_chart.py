@@ -17,6 +17,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from .. import theme as T
 from ..config import HISTORY_CHART_SIZE, LOGICAL_DAY_RESET_HOUR
 from ..core import csv_logger as CL
+from . import icons as IC
 from .widgets import GlassCard
 
 plt.rcParams["font.sans-serif"] = ["Microsoft JhengHei", "Microsoft YaHei", "SimHei"]
@@ -74,6 +75,7 @@ def open_history_chart(parent) -> None:
 
     win = ctk.CTkToplevel(parent)
     win.title(f"時間統計 · {range_text}")
+    IC.apply_window_icon(win)
     w, h = HISTORY_CHART_SIZE
     win.geometry(f"{w}x{h}")
     win.configure(fg_color=T.BG_PRIMARY)
@@ -91,7 +93,6 @@ def open_history_chart(parent) -> None:
         "休息": T.MODE_CFG["break"]["color"],
         "超時休息": T.MODE_CFG["overtime_break"]["color"],
     }
-    EMOJI = {"專注": "🔥", "超時專注": "⏱", "休息": "💤", "超時休息": "⚠️"}
 
     # ── 統計卡 ──
     stats = GlassCard(win)
@@ -108,9 +109,9 @@ def open_history_chart(parent) -> None:
             chip.pack(side="left", padx=6, pady=2)
             ctk.CTkLabel(
                 chip,
-                text=f"  {EMOJI[act]}  {act}  ·  {CL.format_duration_human(totals[act])}  ",
+                text=f"  {act}  ·  {CL.format_duration_human(totals[act])}  ",
                 font=(T.FONT_FAMILY_UI, 12, "bold"),
-                text_color="white",
+                text_color=T.ON_ACCENT,
             ).pack(padx=4, pady=6)
     else:
         ctk.CTkLabel(

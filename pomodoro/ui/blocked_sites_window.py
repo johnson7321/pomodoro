@@ -9,6 +9,7 @@ import customtkinter as ctk
 from .. import theme as T
 from ..config import BLOCKED_SITES_SIZE
 from ..core import hosts_blocker as HB
+from . import icons as IC
 from .widgets import GhostButton, GlassCard, PillButton
 
 
@@ -29,6 +30,7 @@ def open_blocked_sites_window(
     """
     win = ctk.CTkToplevel(parent)
     win.title("封鎖網站設定")
+    IC.apply_window_icon(win)
     w, h = BLOCKED_SITES_SIZE
     win.geometry(f"{w}x{h}")
     win.configure(fg_color=T.BG_PRIMARY)
@@ -38,7 +40,8 @@ def open_blocked_sites_window(
 
     # ── 標題 ──
     ctk.CTkLabel(
-        win, text="🚫  封鎖網站",
+        win, text="  封鎖網站", compound="left",
+        image=IC.icon("block", 22, T.TEXT_PRIMARY),
         font=(T.FONT_FAMILY_UI, 19, "bold"),
         text_color=T.TEXT_PRIMARY,
     ).pack(pady=(20, 2))
@@ -55,20 +58,23 @@ def open_blocked_sites_window(
     if HB.is_admin():
         ctk.CTkLabel(
             perm_card,
-            text="✅  已取得管理員權限",
+            text="  已取得管理員權限", compound="left",
+            image=IC.icon("check", 16, T.SUCCESS),
             font=(T.FONT_FAMILY_UI, 12, "bold"),
             text_color=T.SUCCESS,
         ).pack(pady=10, padx=14)
     else:
         ctk.CTkLabel(
             perm_card,
-            text="⚠️  目前未以管理員執行，封鎖無法生效",
+            text="  目前未以管理員執行，封鎖無法生效", compound="left",
+            image=IC.icon("warn", 16, T.WARNING),
             font=(T.FONT_FAMILY_UI, 12, "bold"),
             text_color=T.WARNING,
         ).pack(pady=(10, 4), padx=14)
         PillButton(
             perm_card,
-            text="🔑  以管理員身分重新啟動",
+            text="以管理員身分重新啟動", icon="shield", icon_size=18,
+            text_color=T.ON_ACCENT,
             color=T.WARNING, hover="#C97900",
             command=lambda: (HB.restart_as_admin(), parent.destroy()),
             height=34,
@@ -103,9 +109,9 @@ def open_blocked_sites_window(
                 anchor="w",
             ).pack(side="left", expand=True, fill="x")
             ctk.CTkButton(
-                row, text="✕", width=30, height=28,
+                row, text="", width=30, height=28,
+                image=IC.icon("close", 14, "#FFFFFF"),
                 fg_color=T.DANGER, hover_color=T.DANGER_HOVER,
-                font=(T.FONT_FAMILY_MONO, 12, "bold"),
                 corner_radius=8,
                 command=lambda s=site: remove_site(s),
             ).pack(side="right", padx=2)
@@ -149,7 +155,7 @@ def open_blocked_sites_window(
 
     PillButton(
         add_frame, text="新增", color=T.MODE_CFG["work"]["color"],
-        hover=T.MODE_CFG["work"]["hover"],
+        hover=T.MODE_CFG["work"]["hover"], text_color=T.ON_ACCENT,
         width=70, height=38, command=add_site,
     ).pack(side="left")
 

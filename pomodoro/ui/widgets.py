@@ -12,6 +12,7 @@ import customtkinter as ctk
 from PIL import Image, ImageDraw, ImageFilter, ImageTk
 
 from .. import theme as T
+from . import icons
 
 
 # ---------------------------------------------------------------------------
@@ -32,20 +33,48 @@ class GlassCard(ctk.CTkFrame):
 # ---------------------------------------------------------------------------
 # Pill button (主要動作)
 # ---------------------------------------------------------------------------
-class PillButton(ctk.CTkButton):
-    def __init__(self, master, *, color: str, hover: str, **kw):
+class _IconMixin:
+    """讓按鈕帶一個單色圖示，且停用時圖示一起換成停用色。
+
+    CTkButton 的 text_color_disabled 只管文字，圖示是圖片不會跟著變，
+    所以在 configure(state=...) 時自己換圖。
+    """
+
+    def _init_icon(self, name, size, color, disabled_color) -> None:
+        self._icon_cfg = (name, size, color, disabled_color)
+        self._icon_off = False
+        self._refresh_icon()
+
+    def _refresh_icon(self) -> None:
+        name, size, color, disabled = self._icon_cfg
+        img = icons.icon(name, size, disabled if (self._icon_off and disabled) else color)
+        ctk.CTkButton.configure(self, image=img, compound="left")
+
+    def configure(self, require_redraw=False, **kw):
+        super().configure(require_redraw=require_redraw, **kw)
+        if "state" in kw and getattr(self, "_icon_cfg", None):
+            self._icon_off = kw["state"] == "disabled"
+            self._refresh_icon()
+
+
+class PillButton(_IconMixin, ctk.CTkButton):
+    def __init__(self, master, *, color: str, hover: str, icon: Optional[str] = None,
+                 icon_size: int = 18, icon_color=None, **kw):
         kw.setdefault("corner_radius", 22)
         kw.setdefault("height", 44)
         kw.setdefault("font", (T.FONT_FAMILY_UI, 14, "bold"))
         kw.setdefault("text_color", "white")
         kw.setdefault("text_color_disabled", T.DISABLED_FG)
         super().__init__(master, fg_color=color, hover_color=hover, **kw)
+        if icon:
+            self._init_icon(icon, icon_size, icon_color or kw["text_color"], T.DISABLED_FG)
 
 
-class GhostButton(ctk.CTkButton):
+class GhostButton(_IconMixin, ctk.CTkButton):
     """透明底 + 細邊框的次要按鈕。"""
 
-    def __init__(self, master, **kw):
+    def __init__(self, master, *, icon: Optional[str] = None, icon_size: int = 18,
+                 icon_color=None, **kw):
         kw.setdefault("corner_radius", 12)
         kw.setdefault("height", 38)
         kw.setdefault("fg_color", "transparent")
@@ -55,6 +84,8 @@ class GhostButton(ctk.CTkButton):
         kw.setdefault("hover_color", T.BG_GLASS_HOVER)
         kw.setdefault("font", (T.FONT_FAMILY_UI, 13))
         super().__init__(master, **kw)
+        if icon:
+            self._init_icon(icon, icon_size, icon_color or kw["text_color"], T.DISABLED_FG)
 
 
 # ---------------------------------------------------------------------------
@@ -68,10 +99,15 @@ class StatusBadge(ctk.CTkLabel):
         kw.setdefault("text_color", T.TEXT_PRIMARY)
         super().__init__(master, **kw)
 
-    def set_mode(self, label: str, badge_light: Tuple[str, str], badge_dark: Tuple[str, str]) -> None:
+    def set_mode(self, label: str, badge_light: Tuple[str, str], badge_dark: Tuple[str, str],
+                 dot_color: Optional[str] = None) -> None:
         is_dark = ctk.get_appearance_mode() == "Dark"
         bg, fg = badge_dark if is_dark else badge_light
-        self.configure(text=f"  {label}  ", fg_color=bg, text_color=fg)
+        if dot_color:
+            self.configure(text=f" {label}  ", fg_color=bg, text_color=fg,
+                           image=icons.icon("dot", 12, dot_color), compound="left")
+        else:
+            self.configure(text=f"  {label}  ", fg_color=bg, text_color=fg)
 
 
 # ---------------------------------------------------------------------------

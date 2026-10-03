@@ -22,7 +22,16 @@ v2.0 已把原本的單檔 `pomodoro_window.py` 拆成 `pomodoro/` 套件，分�
   - `main_window.py` 主視窗，最大的檔，把 core 三者串起來
   - `widgets.py` 自訂元件：GlassCard / PillButton / GhostButton / StatusBadge / GlowRing / MinutesEntry
     （GlowRing 的環用 Pillow 超取樣繪成圖片放在 Canvas 底層以消除鋸齒，文字仍是 Canvas 文字）
+  - `icons.py` 用 Pillow 畫的單色圖示組（`icon(name, size, color)`）、App 標誌、`apply_window_icon()`
   - `history_chart.py`、`blocked_sites_window.py` 兩個子視窗
+
+## 資產
+
+- `assets/app.ico`、`assets/app.png` 由 `venv\Scripts\python.exe tools\make_icon.py` 產生（番茄圖示）；
+  `pomodoro_window.spec` 把它們打進 exe 並設為 exe 圖示，執行時用 `icons.resource_path()` 取檔。
+- 介面不用表情符號當圖示（Tk 會畫成大小不一的單色字，也無法隨停用狀態變色）。
+  按鈕圖示用 `PillButton / GhostButton` 的 `icon=` 參數；`configure(state=...)` 時圖示會自動換成停用色。
+  `MODE_CFG[...]["icon"]` 的表情符號只剩原生 messagebox 對話框在用。
 
 ## 入口
 
@@ -75,7 +84,11 @@ CSV 格式：`utf-8-sig`，欄位 `時間戳記,活動類型,持續時間`。
    必須用 `logical_date_of()`。曾經用 `ts.startswith(get_logical_date())` 比對，結果 00:00~03:59
    的紀錄被印上當天日期、卻不屬於任何邏輯日 —— 圖表和「完成 N 次」同時看不到它。
 
-8. **打包版啟動時 `main.py` 會 `chdir` 到 exe 所在資料夾。** 紀錄檔、`blocked_sites.json`、
+8. **視窗圖示要延後設定。** customtkinter 會在視窗建立約 200ms 後蓋上自己的預設圖示，
+   所以 `apply_window_icon()` 用 `after(350)`；直接在建構時 `iconbitmap` 會被蓋回藍色預設圖示。
+9. **最小化一律進迷你模式（不需要釘選）。** `<Unmap>` 永遠綁定；迷你視窗自己會置頂，離開後才依釘選狀態決定。
+   進出迷你模式必須同步改 `minsize`，否則視窗縮不下去。
+10. **打包版啟動時 `main.py` 會 `chdir` 到 exe 所在資料夾。** 紀錄檔、`blocked_sites.json`、
    `settings.json` 都用相對路徑；開機自動啟動時工作目錄不是 exe 資料夾，不切過去就會寫到別處。
 
 ## 指令
