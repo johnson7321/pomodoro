@@ -100,8 +100,14 @@ CSV 格式：`utf-8-sig`，欄位 `時間戳記,活動類型,持續時間`。
    播放／暫停是同一顆按鈕，由 `_refresh_primary()` 依 `engine.is_running` 換圖示與顏色；任何改變計時狀態的地方都要呼叫它。
 11. **最小化一律進迷你模式（不需要釘選）。** `<Unmap>` 永遠綁定；迷你視窗自己會置頂，離開後才依釘選狀態決定。
    進出迷你模式必須同步改 `minsize`，否則視窗縮不下去。
-   迷你模式的底色要鋪滿整個視窗：`_paint_mini` 把框（無圓角）、root 底色與標題列（`win11_effects.set_caption_colors`，Win11 才有效）都換成模式色，離開時 `_unpaint_mini` 還原。
-   DWM 在視窗剛調整大小時會忽略標題列設定，所以 `_paint_mini` 會延遲再套一次。
+   **迷你模式是無邊框視窗（`overrideredirect(True)`），不顯示標題列**（沒有應用程式名稱、最小化、關閉鈕），
+   底色鋪滿整個視窗：`_paint_mini` 把框（無圓角）與 root 底色換成模式色，離開時 `_unpaint_mini` 還原。
+   因為沒有標題列：整個迷你視窗可拖曳移動（`_mini_press/_drag/_release`），沒有移動的單擊才還原；
+   進入時要 `focus_force()`，無邊框視窗不會自動取得焦點，快捷鍵才收得到。
+   離開時 `overrideredirect(False)` 之後必須 `withdraw()` + `deiconify()` 框架才會回來，
+   並重新呼叫 `_apply_glass_effect()` 與 `apply_window_icon()`（標題列深色、mica、圖示會掉）。
+   無邊框視窗不在工作列顯示，所以迷你模式只能點視窗還原（或按 Esc）。
+   圓環的狀態副標只在計時中／暫停時顯示，閒置時為空字串，此時時間置中（`GlowRing.set_sub`）。
    **改視窗大小本身會觸發 `<Unmap>`**，所以一律走 `_set_window_size()`（先解除綁定、300ms 後再綁回），
    否則換頁時會被誤判成最小化而跳進迷你模式。主頁與設定頁高度不同（`MAIN_/SETUP_WINDOW_SIZE`），換頁時會調整。
 12. **打包版啟動時 `main.py` 會 `chdir` 到 exe 所在資料夾。** 紀錄檔、`blocked_sites.json`、

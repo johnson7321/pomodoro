@@ -262,9 +262,11 @@ class GlowRing(tk.Canvas):
 
         cx, cy = s // 2, s // 2
 
-        # 主時間
+        self._cx, self._cy = cx, cy
+
+        # 主時間（沒有副標時置中）
         self._time_id = self.create_text(
-            cx, cy - 14,
+            cx, cy,
             text="25:00",
             font=(T.FONT_FAMILY_DIGIT, 48, "bold"),
             fill=text_color,
@@ -272,7 +274,7 @@ class GlowRing(tk.Canvas):
         # 副標
         self._sub_id = self.create_text(
             cx, cy + 32,
-            text="準備開始",
+            text="",
             font=(T.FONT_FAMILY_UI, 12),
             fill=sub_color,
         )
@@ -298,6 +300,8 @@ class GlowRing(tk.Canvas):
 
     def set_sub(self, text: str) -> None:
         self.itemconfig(self._sub_id, text=text)
+        # 有副標時時間上移讓出空間；沒有就置中
+        self.coords(self._time_id, self._cx, self._cy - (14 if text else 0))
 
     def refresh_appearance(self) -> None:
         """切換深淺色模式時重建。"""

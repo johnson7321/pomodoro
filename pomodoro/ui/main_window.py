@@ -101,7 +101,7 @@ class PomodoroApp:
         self.ring = GlowRing(self.main)
         self.ring.grid(row=1, column=0, pady=(8, 4))
         self.ring.set_time(self._format_remaining())
-        self.ring.set_sub("準備開始")
+        self.ring.set_sub("")
 
         # ── 模式切換 ──
         seg_values = ["專注", "休息"]
@@ -256,11 +256,33 @@ class PomodoroApp:
         )
         self._mini_label.pack(expand=True)
 
-        self.mini.bind("<Button-1>", lambda e: self._exit_mini())
-        self._mini_label.bind("<Button-1>", lambda e: self._exit_mini())
+        # 沒有標題列可以拖，所以整個迷你視窗都能拖曳移動；沒有移動的單擊才還原成主視窗
+        for w in (self.mini, self._mini_label):
+            w.bind("<ButtonPress-1>", self._mini_press)
+            w.bind("<B1-Motion>", self._mini_drag)
+            w.bind("<ButtonRelease-1>", self._mini_release)
+
+    def _mini_press(self, e) -> None:
+        self._mini_origin = (e.x_root, e.y_root, self.root.winfo_x(), self.root.winfo_y())
+        self._mini_moved = False
+        self.root.focus_force()
+
+    def _mini_drag(self, e) -> None:
+        x0, y0, wx, wy = self._mini_origin
+        dx, dy = e.x_root - x0, e.y_root - y0
+        if abs(dx) > 3 or abs(dy) > 3:
+            self._mini_moved = True
+        if self._mini_moved:
+            self.root.geometry(f"+{wx + dx}+{wy + dy}")
+
+    def _mini_release(self, _e) -> None:
+        if not self._mini_moved:
+            self._exit_mini()
 
     def _enter_mini(self) -> None:
         self.root.deiconify()
+        self.root.update_idletasks()
+        x, y = self.root.winfo_rootx(), self.root.winfo_rooty()
         self._is_mini = True
         self._mini_label.configure(text=self.ring.itemcget(self.ring._time_id, "text"))  # noqa
         self._paint_mini(T.MODE_CFG[self._mode_key()]["color"])
@@ -268,38 +290,46 @@ class PomodoroApp:
         self.root.resizable(True, True)
         # 主視窗啟動時設了 minsize，不先放寬的話 geometry 縮不下去
         self.root.minsize(w, h)
-        self.root.geometry(f"{w}x{h}")
+        self.root.overrideredirect(True)  # 迷你模式不要標題列（應用程式名稱與最小化／關閉鈕）
+        self.root.geometry(f"{w}x{h}+{x}+{y}")
         self.root.resizable(False, False)
         self.root.attributes("-topmost", True)  # 迷你視窗一律浮在最上層才有用
         self.main.grid_remove()
         self.setup_page.grid_remove()
         self.mini.grid()
+        self.root.focus_force()  # 無邊框視窗不會自動取得焦點，快捷鍵才收得到
 
     def _exit_mini(self) -> None:
         self._is_mini = False
         self._unpaint_mini()
         self.root.unbind("<Unmap>")
+        x, y = self.root.winfo_x(), self.root.winfo_y()
         self.mini.grid_remove()
         if self._in_setup:
             self.setup_page.grid()
         else:
             self.main.grid()
-        self._set_window_size(SETUP_WINDOW_SIZE if self._in_setup else MAIN_WINDOW_SIZE)
+        # 還原標題列；改回一般視窗後要重新顯示，框架才會出現
+        self.root.overrideredirect(False)
+        w, h = SETUP_WINDOW_SIZE if self._in_setup else MAIN_WINDOW_SIZE
+        self.root.resizable(True, True)
+        self.root.minsize(w, h)
+        self.root.geometry(f"{w}x{h}+{x}+{y}")
+        self.root.resizable(False, False)
+        self.root.withdraw()
+        self.root.deiconify()
         self.root.attributes("-topmost", self.always_on_top)
+        self._apply_glass_effect()  # 標題列深色與 mica 要在重新顯示後再套一次
+        IC.apply_window_icon(self.root)
         self.root.after(300, lambda: self.root.bind("<Unmap>", self._on_unmap))
 
     def _paint_mini(self, color: str) -> None:
-        """迷你模式：框、視窗底色與標題列都換成模式色，讓顏色鋪滿整個視窗。"""
+        """迷你模式：框與視窗底色都換成模式色，讓顏色鋪滿整個視窗。"""
         self.mini.configure(fg_color=color)
         self.root.configure(fg_color=color)
-        W11.set_caption_colors(self.root, color, "#FFFFFF")
-        # 剛進入迷你模式、視窗還在調整大小時 DWM 會忽略設定，稍後再套一次
-        self.root.after(150, lambda: self._is_mini and W11.set_caption_colors(
-            self.root, T.MODE_CFG[self._mode_key()]["color"], "#FFFFFF"))
 
     def _unpaint_mini(self) -> None:
         self.root.configure(fg_color=T.BG_PRIMARY)
-        W11.set_caption_colors(self.root, None, None)
 
     def _on_unmap(self, event) -> None:
         if event.widget is self.root and not self._is_mini:
@@ -380,7 +410,7 @@ class PomodoroApp:
         return self.engine.mode
 
     def _state_text(self) -> str:
-        """圓環下方的狀態文字：準備開始 / 專注中 / 已暫停 / 超時專注中…"""
+        """圓環下方的狀態文字：專注中 / 已暫停 / 超時專注中…；閒置時不顯示文字。"""
         name = T.MODE_CFG[self._mode_key()]["name"]
         if self.engine.mode == "overtime":
             return f"{name}中"
@@ -388,7 +418,7 @@ class PomodoroApp:
             return f"{name}中"
         if self.engine.elapsed > 0:
             return "已暫停"
-        return "準備開始"
+        return ""
 
     def _apply_mode_ui(self, key: str) -> None:
         cfg = T.MODE_CFG[key]
