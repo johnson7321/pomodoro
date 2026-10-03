@@ -50,6 +50,10 @@ class SetupPage(ctk.CTkFrame):
             head, text="設定", font=(T.FONT_FAMILY_UI, 18, "bold"),
             text_color=T.TEXT_PRIMARY,
         ).pack(side="left", padx=14)
+        ctk.CTkLabel(
+            head, text="Esc 返回", font=(T.FONT_FAMILY_UI, 11),
+            text_color=T.TEXT_MUTED,
+        ).pack(side="right")
 
         # ── 計時 ──
         card = self._section("計時", 1)

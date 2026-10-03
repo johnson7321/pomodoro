@@ -20,7 +20,7 @@ v2.0 已把原本的單檔 `pomodoro_window.py` 拆成 `pomodoro/` 套件，分�
   - `startup.py` 開機啟動：寫 `HKCU\...\Run` 的 `PomodoroTimer`，只在打包後的 exe 生效
 - `pomodoro/ui/` — customtkinter 畫面
   - `main_window.py` 主視窗，最大的檔，把 core 三者串起來
-  - `widgets.py` 自訂元件：GlassCard / PillButton / GhostButton / StatusBadge / GlowRing / MinutesEntry
+  - `widgets.py` 自訂元件：GlassCard / PillButton / GhostButton / GlowRing / MinutesEntry
     （GlowRing 的環用 Pillow 超取樣繪成圖片放在 Canvas 底層以消除鋸齒，文字仍是 Canvas 文字）
   - `icons.py` 用 Pillow 畫的單色圖示組（`icon(name, size, color)`）、App 標誌、`apply_window_icon()`
   - `setup_page.py` 設定頁（整頁，與主頁在同一視窗內切換）：時長、音量、開機啟動、管理員狀態、封鎖網站清單
@@ -90,11 +90,14 @@ CSV 格式：`utf-8-sig`，欄位 `時間戳記,活動類型,持續時間`。
 
 8. **視窗圖示要延後設定。** customtkinter 會在視窗建立約 200ms 後蓋上自己的預設圖示，
    所以 `apply_window_icon()` 用 `after(350)`；直接在建構時 `iconbitmap` 會被蓋回藍色預設圖示。
-9. **最小化一律進迷你模式（不需要釘選）。** `<Unmap>` 永遠綁定；迷你視窗自己會置頂，離開後才依釘選狀態決定。
+9. **主頁全部可用鍵盤操作，快捷鍵集中在 `main_window._on_key`（綁在 root 的 `<Key>`）。**
+   空白鍵 開始／暫停、R 重置、←/1 專注、→/2 休息、S 設定、T 統計、P 釘選、M 迷你模式；Esc 離開設定頁／迷你模式。
+   快捷鍵綁在整個視窗，設定頁有輸入框，所以 `_in_setup` 時只處理 Esc，否則打字會誤觸計時。新增主頁功能請同步加快捷鍵與底部提示文字。
+10. **最小化一律進迷你模式（不需要釘選）。** `<Unmap>` 永遠綁定；迷你視窗自己會置頂，離開後才依釘選狀態決定。
    進出迷你模式必須同步改 `minsize`，否則視窗縮不下去。
    **改視窗大小本身會觸發 `<Unmap>`**，所以一律走 `_set_window_size()`（先解除綁定、300ms 後再綁回），
    否則換頁時會被誤判成最小化而跳進迷你模式。主頁與設定頁高度不同（`MAIN_/SETUP_WINDOW_SIZE`），換頁時會調整。
-10. **打包版啟動時 `main.py` 會 `chdir` 到 exe 所在資料夾。** 紀錄檔、`blocked_sites.json`、
+11. **打包版啟動時 `main.py` 會 `chdir` 到 exe 所在資料夾。** 紀錄檔、`blocked_sites.json`、
    `settings.json` 都用相對路徑；開機自動啟動時工作目錄不是 exe 資料夾，不切過去就會寫到別處。
 
 ## 指令

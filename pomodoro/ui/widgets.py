@@ -89,28 +89,6 @@ class GhostButton(_IconMixin, ctk.CTkButton):
 
 
 # ---------------------------------------------------------------------------
-# StatusBadge
-# ---------------------------------------------------------------------------
-class StatusBadge(ctk.CTkLabel):
-    def __init__(self, master, **kw):
-        kw.setdefault("font", (T.FONT_FAMILY_UI, 12, "bold"))
-        kw.setdefault("corner_radius", 14)
-        kw.setdefault("fg_color", ("#E9E4DF", "#2A2A34"))
-        kw.setdefault("text_color", T.TEXT_PRIMARY)
-        super().__init__(master, **kw)
-
-    def set_mode(self, label: str, badge_light: Tuple[str, str], badge_dark: Tuple[str, str],
-                 dot_color: Optional[str] = None) -> None:
-        is_dark = ctk.get_appearance_mode() == "Dark"
-        bg, fg = badge_dark if is_dark else badge_light
-        if dot_color:
-            self.configure(text=f" {label}  ", fg_color=bg, text_color=fg,
-                           image=icons.icon("dot", 12, dot_color), compound="left")
-        else:
-            self.configure(text=f"  {label}  ", fg_color=bg, text_color=fg)
-
-
-# ---------------------------------------------------------------------------
 # 玻璃擬態圓形進度環（含 glow / 軌道 / 中央時間）
 # ---------------------------------------------------------------------------
 def _rgb(color: str) -> Tuple[int, int, int]:

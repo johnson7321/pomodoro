@@ -60,8 +60,6 @@ MODE_CFG = {
         "color_soft": "#FFA8A8",
         "hover": "#E55555",
         "glow": "#FF8E72",
-        "badge_light": ("#FFE3E3", "#9B1C1C"),
-        "badge_dark": ("#3A1414", "#FFB3B3"),
     },
     "break": {
         "name": "休息",
@@ -71,8 +69,6 @@ MODE_CFG = {
         "color_soft": "#A5D8FF",
         "hover": "#1C7ED6",
         "glow": "#74C0FC",
-        "badge_light": ("#D0EBFF", "#0B4F87"),
-        "badge_dark": ("#0B2540", "#A5D8FF"),
     },
     # 時間到之後使用者選擇「繼續」→ 計時改為往上累加
     "overtime_work": {
@@ -83,8 +79,6 @@ MODE_CFG = {
         "color_soft": "#FFC078",
         "hover": "#E8590C",
         "glow": "#FFA94D",
-        "badge_light": ("#FFE8CC", "#8A3D00"),
-        "badge_dark": ("#3D2200", "#FFC078"),
     },
     "overtime_break": {
         "name": "超時休息",
@@ -94,8 +88,6 @@ MODE_CFG = {
         "color_soft": "#FFD43B",
         "hover": "#E67700",
         "glow": "#FFD43B",
-        "badge_light": ("#FFF3BF", "#7C4A00"),
-        "badge_dark": ("#3D2A00", "#FFD43B"),
     },
 }
 

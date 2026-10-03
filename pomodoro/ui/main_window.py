@@ -20,7 +20,7 @@ from ..core.timer_engine import TimerEngine
 from . import icons as IC
 from .history_chart import open_history_chart
 from .setup_page import SetupPage
-from .widgets import GhostButton, GlowRing, PillButton, StatusBadge
+from .widgets import GhostButton, GlowRing, PillButton
 
 
 class PomodoroApp:
@@ -89,9 +89,6 @@ class PomodoroApp:
         top = ctk.CTkFrame(self.main, fg_color="transparent")
         top.grid(row=0, column=0, sticky="ew", padx=22, pady=(20, 6))
         top.grid_columnconfigure(1, weight=1)
-
-        self.status_badge = StatusBadge(top, text="  準備開始  ")
-        self.status_badge.grid(row=0, column=0, sticky="w")
 
         self.btn_pin = ctk.CTkButton(
             top, text="", width=36, height=32,
@@ -205,10 +202,11 @@ class PomodoroApp:
 
         # ── 底部：快捷鍵提示 ──
         ctk.CTkLabel(
-            self.main, text="空白鍵　開始／暫停　·　R　重置",
-            text_color=T.TEXT_MUTED,
+            self.main,
+            text="空白鍵 開始／暫停　R 重置　← → 切換模式\nS 設定　T 統計　P 釘選　M 迷你模式",
+            text_color=T.TEXT_MUTED, justify="center",
             font=(T.FONT_FAMILY_UI, 11),
-        ).grid(row=8, column=0, pady=(14, 14))
+        ).grid(row=8, column=0, pady=(12, 12))
 
     # ======================================================================
     # 設定頁
@@ -368,7 +366,10 @@ class PomodoroApp:
         return "專注" if mode == "work" else "休息"
 
     def _on_mode_segment(self, value: str) -> None:
-        new_mode = "work" if "專注" in value else "break"
+        self._select_mode("work" if "專注" in value else "break")
+
+    def _select_mode(self, new_mode: str) -> None:
+        """點分段按鈕或按方向鍵切換模式；與點擊相同，切過去就開始計時。"""
         if new_mode == self.engine.mode and self.engine.mode != "overtime":
             return
         self._switch_mode(new_mode, auto_start=True)
@@ -438,8 +439,6 @@ class PomodoroApp:
 
     def _apply_mode_ui(self, key: str) -> None:
         cfg = T.MODE_CFG[key]
-        self.status_badge.set_mode(cfg["name"], cfg["badge_light"], cfg["badge_dark"],
-                                   dot_color=cfg["color"])
         self.ring.set_color(cfg["color"])
         self.ring.set_sub(self._state_text())
 
@@ -645,12 +644,46 @@ class PomodoroApp:
     # 鍵盤
     # ======================================================================
     def _bind_shortcuts(self) -> None:
-        self.root.bind(
-            "<space>",
-            lambda e: self.pause_timer() if self.engine.is_running else self.start_timer(),
-        )
-        self.root.bind("<KeyPress-r>", lambda e: self.reset_timer())
-        self.root.bind("<KeyPress-R>", lambda e: self.reset_timer())
+        self.root.bind("<Key>", self._on_key)
+
+    def _toggle_run(self) -> None:
+        if self.engine.is_running:
+            self.pause_timer()
+        else:
+            self.start_timer()
+
+    def _on_key(self, e) -> None:
+        """全域快捷鍵。主頁完全可用鍵盤操作；設定頁有輸入框，打字不能觸發計時，只留 Esc。"""
+        if e.state & 0x0004 or e.state & 0x20000:  # Ctrl / Alt 組合鍵交給系統
+            return
+        key = e.keysym.lower()
+        if self._in_setup:
+            if key == "escape":
+                self.hide_setup()
+            return
+        if self._is_mini:
+            if key == "escape":
+                self._exit_mini()
+            elif key == "space":
+                self._toggle_run()
+            elif key == "r":
+                self.reset_timer()
+            return
+        actions = {
+            "space": self._toggle_run,
+            "r": self.reset_timer,
+            "left": lambda: self._select_mode("work"),
+            "1": lambda: self._select_mode("work"),
+            "right": lambda: self._select_mode("break"),
+            "2": lambda: self._select_mode("break"),
+            "s": self.show_setup,
+            "t": lambda: open_history_chart(self.root),
+            "p": self.toggle_always_on_top,
+            "m": self._enter_mini,
+        }
+        action = actions.get(key)
+        if action:
+            action()
 
     # ======================================================================
     # Hosts blocker
