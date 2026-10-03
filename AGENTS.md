@@ -72,9 +72,10 @@ CSV 格式：`utf-8-sig`，欄位 `時間戳記,活動類型,持續時間`。
 1. **`MODE_CFG` 沒有 `"overtime"` 這個鍵。** `engine.mode` 的超時態只有 `"overtime"` 一個值，要先用
    `main_window._mode_key()`（看 `engine.overtime_kind`）轉成 `overtime_work` / `overtime_break`
    再查 `MODE_CFG`。直接寫 `MODE_CFG[self.engine.mode]` 在超時時會 KeyError。
-2. **時間到的彈窗必須在 `_enter_overtime(kind)` 之後才彈。** tkinter modal 對話框開的是巢狀事件迴圈，
-   `after()` 排程的 tick 在裡面照常觸發 —— 這正是「未選擇前時間持續累加」的實作方式。
-   改成先彈窗再啟動累加就會失效。
+2. **時間到不彈窗，改在主頁內顯示選擇區（`_show_prompt`）。** 必須在 `_enter_overtime(kind)` 之後才顯示：
+   進入超時後 tick 照常累加，選擇之前的時間都算進超時。選擇區底色透明，蓋在模式選擇／按鈕列的位置，圓環與倒數仍可見；
+   「開始休息／專注」（Enter）走 `_switch_mode`，「繼續」（Esc）只收起選擇區。`_switch_mode` 與 `reset_timer` 都會 `_hide_prompt()`。
+   選擇區顯示時 `_on_key` 優先處理 Enter／Esc。
 3. **`csv_logger.append_row()` 的 `filename` 預設值在函式定義時就綁死了**，改 `CL.LOG_FILE` 不會生效；
    要換紀錄檔得從 cwd 下手。
 4. **不要跑 `pip install -r requirements.txt`。** 那是 233 包、UTF-16LE 編碼的全環境 freeze，
@@ -83,7 +84,7 @@ CSV 格式：`utf-8-sig`，欄位 `時間戳記,活動類型,持續時間`。
 5. 改 `MODE_CFG` 的鍵名時，別漏掉 `history_chart.py` 裡「活動名稱 → 顏色」的對應。
 6. 封鎖網站要管理員權限：`hosts_blocker.apply_block()` 非管理員直接回 False。**UI 不跳詢問視窗，主頁也不放權限提示**：
    沒權限時封鎖直接略過；狀態與「以管理員身分重新啟動」按鈕都在設定頁。錯誤與回饋一律顯示在設定頁內（`show_message`），不用 messagebox。
-   只有「時間到」的繼續／切換選擇與存檔失敗仍用 messagebox；
+   只有存檔失敗仍用 messagebox；
    它會改 `C:\Windows\System32\drivers\etc\hosts` 並執行 `ipconfig /flushdns`。
 7. **日期歸屬一律走邏輯日。** 時間戳記存的是實體時間（寫入時 `datetime.now()`），但「算哪一天」
    必須用 `logical_date_of()`。曾經用 `ts.startswith(get_logical_date())` 比對，結果 00:00~03:59

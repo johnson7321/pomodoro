@@ -21,7 +21,7 @@ from . import icons as IC
 from .history_chart import open_history_chart
 from .mini_view import MiniView
 from .setup_page import SetupPage
-from .widgets import GhostButton, GlowRing, RoundIconButton
+from .widgets import GhostButton, GlowRing, PillButton, RoundIconButton
 
 
 class PomodoroApp:
@@ -125,7 +125,7 @@ class PomodoroApp:
         self.mode_selector.grid(row=2, column=0, padx=30, pady=(0, 6), sticky="ew")
 
         # ── 控制：單一播放／暫停鈕（只有符號）＋ 重置 ──
-        btn_row = ctk.CTkFrame(self.main, fg_color="transparent")
+        btn_row = self.btn_row = ctk.CTkFrame(self.main, fg_color="transparent")
         btn_row.grid(row=3, column=0, pady=(12, 6))
 
         # 左側放一個和重置鈕同寬的空位，主按鈕才會在視窗正中央
@@ -144,7 +144,7 @@ class PomodoroApp:
         self.btn_reset.pack(side="left", padx=12)
 
         # ── 功能入口：兩顆並排的次要按鈕 ──
-        action_col = ctk.CTkFrame(self.main, fg_color="transparent")
+        action_col = self.action_col = ctk.CTkFrame(self.main, fg_color="transparent")
         action_col.grid(row=4, column=0, sticky="ew", padx=30, pady=(12, 22))
         action_col.grid_columnconfigure((0, 1), weight=1, uniform="act")
 
@@ -157,6 +157,62 @@ class PomodoroApp:
             action_col, text="設定", icon="gear", icon_size=18,
             command=self.show_setup,
         ).grid(row=0, column=1, sticky="ew", padx=(4, 0))
+
+        self._build_prompt()
+
+    # ======================================================================
+    # 時間到提示（取代彈窗）：蓋在控制區的位置，底色透明，圓環與倒數照常可見
+    # ======================================================================
+    def _build_prompt(self) -> None:
+        self._prompt_kind: str | None = None  # "work" / "break"：哪一種時間到；None 表示沒有提示
+        self.prompt = ctk.CTkFrame(self.main, fg_color="transparent")
+        self.prompt.grid_columnconfigure(0, weight=1)
+        self.prompt_title = ctk.CTkLabel(
+            self.prompt, text="", font=(T.FONT_FAMILY_UI, 18, "bold"), text_color=T.TEXT_PRIMARY)
+        self.prompt_title.grid(row=0, column=0, pady=(6, 0))
+        self.prompt_hint = ctk.CTkLabel(
+            self.prompt, text="", font=(T.FONT_FAMILY_UI, 12), text_color=T.TEXT_SECONDARY)
+        self.prompt_hint.grid(row=1, column=0, pady=(2, 14))
+        self.prompt_switch = PillButton(
+            self.prompt, text="", color=T.MODE_CFG["work"]["color"],
+            hover=T.MODE_CFG["work"]["hover"], command=self._prompt_switch)
+        self.prompt_switch.grid(row=2, column=0, sticky="ew", padx=30)
+        self.prompt_continue = GhostButton(
+            self.prompt, text="", height=42, command=self._prompt_continue)
+        self.prompt_continue.grid(row=3, column=0, sticky="ew", padx=30, pady=(10, 0))
+        self.prompt.grid(row=2, column=0, rowspan=3, sticky="new")
+        self.prompt.grid_remove()
+
+    def _show_prompt(self, kind: str) -> None:
+        """kind：剛結束的模式（work / break）。"""
+        self._prompt_kind = kind
+        nxt = "break" if kind == "work" else "work"
+        cfg, ncfg = T.MODE_CFG[kind], T.MODE_CFG[nxt]
+        self.prompt_title.configure(text=f"{cfg['name']}結束")
+        self.prompt_hint.configure(text="時間持續累加中")
+        self.prompt_switch.configure(
+            text=f"開始{ncfg['name']}（Enter）", fg_color=ncfg["color"], hover_color=ncfg["hover"])
+        self.prompt_continue.configure(text=f"繼續{cfg['name']}・記錄超時（Esc）")
+        for w in (self.mode_selector, self.btn_row, self.action_col):
+            w.grid_remove()
+        self.prompt.grid()
+
+    def _hide_prompt(self) -> None:
+        if self._prompt_kind is None:
+            return
+        self._prompt_kind = None
+        self.prompt.grid_remove()
+        self.mode_selector.grid()
+        self.btn_row.grid()
+        self.action_col.grid()
+
+    def _prompt_switch(self) -> None:
+        kind = self._prompt_kind
+        if kind:
+            self._switch_mode("break" if kind == "work" else "work", auto_start=True)
+
+    def _prompt_continue(self) -> None:
+        self._hide_prompt()  # 留在超時狀態續跑，不中斷
 
     # ======================================================================
     # 設定頁
@@ -381,6 +437,7 @@ class PomodoroApp:
         else:
             self._toggle_block(False)
 
+        self._hide_prompt()
         self.engine.switch_to(mode)
         self._apply_mode_ui(mode)
         self.mode_selector.set(self._seg_value_for(mode))
@@ -468,6 +525,7 @@ class PomodoroApp:
 
     def reset_timer(self) -> None:
         self._cancel_tick()
+        self._hide_prompt()
         self._save_current()
         self._toggle_block(False)
         self.engine.reset()
@@ -508,36 +566,11 @@ class PomodoroApp:
         self._play_alarm()
         self._save_current()
 
-        # 先進入超時累加並繼續 tick，再彈對話框。
-        # 對話框的巢狀事件迴圈會照樣執行 after()，所以「還沒選擇之前」
-        # 的時間都會被累加進去，選擇「繼續」後也直接沿用同一段累加。
+        # 先進入超時累加並繼續 tick，再顯示頁面內的選擇區；
+        # 選擇之前的時間都會累加進超時，選「繼續」後沿用同一段累加。
         self._enter_overtime(mode)
 
-        cfg = T.MODE_CFG[mode]
-        if mode == "work":
-            ans = messagebox.askokcancel(
-                "時間到！",
-                f"{cfg['icon']} {cfg['name']}結束！\n\n"
-                "• 確定 → 開始休息\n"
-                "• 取消 → 繼續專注（記錄超時）\n\n"
-                "（計時持續累加中）",
-                icon="info", parent=self.root,
-            )
-            if ans:
-                self._switch_mode("break", auto_start=True)
-            # 取消 → 留在「超時專注」續跑，不中斷
-        else:
-            ans = messagebox.askokcancel(
-                "休息結束！",
-                f"{cfg['icon']} {cfg['name']}結束！\n\n"
-                "• 確定 → 開始專注\n"
-                "• 取消 → 繼續休息（記錄超時）\n\n"
-                "（計時持續累加中）",
-                icon="info", parent=self.root,
-            )
-            if ans:
-                self._switch_mode("work", auto_start=True)
-            # 取消 → 留在「超時休息」續跑，不中斷
+        self._show_prompt(mode)
 
     # ======================================================================
     # UI 狀態切換
@@ -648,6 +681,13 @@ class PomodoroApp:
             elif key == "r":
                 self.reset_timer()
             return
+        if self._prompt_kind:
+            if key in ("return", "kp_enter"):
+                self._prompt_switch()
+                return
+            if key == "escape":
+                self._prompt_continue()
+                return
         actions = {
             "space": self._toggle_run,
             "r": self.reset_timer,
