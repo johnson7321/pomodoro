@@ -118,6 +118,31 @@ def _draw_shield(d, u, w, c):
     d.line(pts + [pts[0]], fill=c, width=int(u(.06)), joint="curve")
 
 
+def _draw_gear(d, u, w, c):
+    cx = cy = .5
+    d.ellipse((u(.26), u(.26), u(.74), u(.74)), fill=c)
+    for i in range(8):  # 八顆齒
+        a = math.radians(i * 45)
+        ux, uy = math.cos(a), math.sin(a)
+        px, py = -uy, ux
+        r0, r1, hw = .30, .43, .075
+        pts = [(cx + ux * r0 + px * hw, cy + uy * r0 + py * hw),
+               (cx + ux * r1 + px * hw * .8, cy + uy * r1 + py * hw * .8),
+               (cx + ux * r1 - px * hw * .8, cy + uy * r1 - py * hw * .8),
+               (cx + ux * r0 - px * hw, cy + uy * r0 - py * hw)]
+        d.polygon([(u(x), u(y)) for x, y in pts], fill=c)
+    hole = c[:3] + (0,)
+    d.ellipse((u(.39), u(.39), u(.61), u(.61)), fill=hole)
+
+
+def _draw_back(d, u, w, c):
+    pts = [(u(.62), u(.20)), (u(.34), u(.50)), (u(.62), u(.80))]
+    d.line(pts, fill=c, width=w, joint="curve")
+    for x, y in (pts[0], pts[-1]):
+        r = w / 2
+        d.ellipse((x - r, y - r, x + r, y + r), fill=c)
+
+
 def _draw_close(d, u, w, c):
     for p in (((.28, .28), (.72, .72)), ((.72, .28), (.28, .72))):
         (x0, y0), (x1, y1) = p
@@ -131,7 +156,7 @@ _DRAWERS = {
     "play": _draw_play, "pause": _draw_pause, "reset": _draw_reset, "chart": _draw_chart,
     "block": _draw_block, "bell": _draw_bell, "pin": _draw_pin, "moon": _draw_moon,
     "dot": _draw_dot, "check": _draw_check, "warn": _draw_warn, "shield": _draw_shield,
-    "close": _draw_close,
+    "close": _draw_close, "gear": _draw_gear, "back": _draw_back,
 }
 
 

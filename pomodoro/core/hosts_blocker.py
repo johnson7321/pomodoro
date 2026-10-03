@@ -27,9 +27,9 @@ def is_admin() -> bool:
 def restart_as_admin() -> bool:
     """以管理員身分重新啟動本程式；成功觸發時回傳 True。"""
     try:
-        ctypes.windll.shell32.ShellExecuteW(
-            None, "runas", sys.executable, " ".join(sys.argv), None, 1
-        )
+        # 打包版的 sys.executable 就是程式本身，不需要參數；開發模式要帶上入口腳本
+        params = "" if getattr(sys, "frozen", False) else f'"{sys.argv[0]}"'
+        ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, params, None, 1)
         return True
     except Exception:
         return False

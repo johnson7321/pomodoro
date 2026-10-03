@@ -9,13 +9,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 from .. import theme as T
-from ..config import (
-    BLOCKED_SITES_FILE,
-    DEFAULT_BREAK_MINUTES,
-    DEFAULT_WORK_MINUTES,
-    MAIN_WINDOW_SIZE,
-    MINI_WINDOW_SIZE,
-)
+from ..config import MAIN_WINDOW_SIZE, MINI_WINDOW_SIZE, SETUP_WINDOW_SIZE
 from ..core import alarm as AL
 from ..core import csv_logger as CL
 from ..core import hosts_blocker as HB
@@ -24,9 +18,9 @@ from ..core import startup as SU
 from ..core import win11_effects as W11
 from ..core.timer_engine import TimerEngine
 from . import icons as IC
-from .blocked_sites_window import open_blocked_sites_window
 from .history_chart import open_history_chart
-from .widgets import GhostButton, GlassCard, GlowRing, MinutesEntry, PillButton, StatusBadge
+from .setup_page import SetupPage
+from .widgets import GhostButton, GlowRing, PillButton, StatusBadge
 
 
 class PomodoroApp:
@@ -46,9 +40,10 @@ class PomodoroApp:
         self.root.configure(fg_color=T.BG_PRIMARY)
 
         # ── 業務邏輯 ──
+        self.settings = ST.load()
         self.engine = TimerEngine(
-            work_seconds=DEFAULT_WORK_MINUTES * 60,
-            break_seconds=DEFAULT_BREAK_MINUTES * 60,
+            work_seconds=self.settings["work_minutes"] * 60,
+            break_seconds=self.settings["break_minutes"] * 60,
         )
         self.engine.on_tick = self._on_engine_tick
         self.engine.on_complete = self._on_engine_complete
@@ -61,7 +56,7 @@ class PomodoroApp:
 
         self.work_count = CL.count_today_focus()
 
-        self.settings = ST.load()
+        self._in_setup = False
         if SU.is_frozen():
             SU.set_enabled(self.settings["autostart"])
 
@@ -69,8 +64,10 @@ class PomodoroApp:
         self.root.grid_columnconfigure(0, weight=1)
         self.root.grid_rowconfigure(0, weight=1)
         self._build_main_ui()
+        self._build_setup_ui()
         self._build_mini_ui()
         self._apply_mode_ui("work")
+        self._refresh_banner()
 
         # 套用 Win11 mica（失敗會 silently 回 fallback 純色）
         self._apply_glass_effect()
@@ -113,34 +110,6 @@ class PomodoroApp:
         self.ring.set_time(self._format_remaining())
         self.ring.set_sub("準備開始")
 
-        # ── 設定卡 ──
-        settings_card = GlassCard(self.main)
-        settings_card.grid(row=2, column=0, padx=30, pady=(0, 8), sticky="ew")
-        inner = ctk.CTkFrame(settings_card, fg_color="transparent")
-        inner.pack(pady=10)
-
-        lbl_font = (T.FONT_FAMILY_UI, 12, "bold")
-
-        ctk.CTkLabel(
-            inner, text=" 專注", compound="left",
-            image=IC.icon("dot", 12, T.MODE_CFG["work"]["color"]),
-            font=lbl_font, text_color=T.MODE_CFG["work"]["color"],
-        ).pack(side="left", padx=(2, 6))
-        self.work_entry = MinutesEntry(inner, default=DEFAULT_WORK_MINUTES)
-        self.work_entry.pack(side="left", padx=(0, 2))
-        ctk.CTkLabel(inner, text="分", font=(T.FONT_FAMILY_UI, 12),
-                     text_color=T.TEXT_SECONDARY).pack(side="left", padx=(0, 22))
-
-        ctk.CTkLabel(
-            inner, text=" 休息", compound="left",
-            image=IC.icon("dot", 12, T.MODE_CFG["break"]["color"]),
-            font=lbl_font, text_color=T.MODE_CFG["break"]["color"],
-        ).pack(side="left", padx=(2, 6))
-        self.break_entry = MinutesEntry(inner, default=DEFAULT_BREAK_MINUTES)
-        self.break_entry.pack(side="left", padx=(0, 2))
-        ctk.CTkLabel(inner, text="分", font=(T.FONT_FAMILY_UI, 12),
-                     text_color=T.TEXT_SECONDARY).pack(side="left")
-
         # ── 模式切換 ──
         seg_values = ["專注", "休息"]
         self.mode_selector = ctk.CTkSegmentedButton(
@@ -159,11 +128,11 @@ class PomodoroApp:
             text_color_disabled=T.TEXT_MUTED,
         )
         self.mode_selector.set(seg_values[0])
-        self.mode_selector.grid(row=3, column=0, padx=30, pady=(0, 6), sticky="ew")
+        self.mode_selector.grid(row=2, column=0, padx=30, pady=(0, 6), sticky="ew")
 
         # ── 控制按鈕 ──
         btn_row = ctk.CTkFrame(self.main, fg_color="transparent")
-        btn_row.grid(row=4, column=0, pady=4)
+        btn_row.grid(row=3, column=0, pady=4)
 
         # 主次分明：「開始」最寬、最醒目；「暫停」次之；「重置」只留外框，避免與主動作搶焦點
         self.btn_start = PillButton(
@@ -200,13 +169,24 @@ class PomodoroApp:
             font=(T.FONT_FAMILY_UI, 14, "bold"),
             text_color=T.TEXT_PRIMARY,
         )
-        self.count_label.grid(row=5, column=0, pady=(10, 0))
+        self.count_label.grid(row=4, column=0, pady=(10, 0))
         self.day_label = ctk.CTkLabel(
             self.main, text="",
             font=(T.FONT_FAMILY_UI, 11),
             text_color=T.TEXT_MUTED,
         )
-        self.day_label.grid(row=6, column=0, pady=(0, 6))
+        self.day_label.grid(row=5, column=0, pady=(0, 6))
+
+        # ── 沒有管理員權限時的提示列（平常隱藏，點一下前往設定頁處理） ──
+        self.admin_banner = ctk.CTkButton(
+            self.main, text=" 封鎖網站尚未生效：需要管理員權限　›",
+            image=IC.icon("warn", 16, ("#8A5A00", "#FFD27A")), compound="left",
+            height=32, corner_radius=10, font=(T.FONT_FAMILY_UI, 12),
+            fg_color=("#FFF3DC", "#3A2C10"), hover_color=("#FFE7B8", "#4A3814"),
+            text_color=("#8A5A00", "#FFD27A"),
+            command=self.show_setup,
+        )
+        self.admin_banner.grid(row=6, column=0, sticky="ew", padx=30, pady=(2, 4))
 
         # ── 功能入口：兩顆並排的次要按鈕 ──
         action_col = ctk.CTkFrame(self.main, fg_color="transparent")
@@ -219,56 +199,104 @@ class PomodoroApp:
         ).grid(row=0, column=0, sticky="ew", padx=(0, 4))
 
         GhostButton(
-            action_col, text="封鎖網站", icon="block", icon_size=18,
-            command=self._open_blocked,
+            action_col, text="設定", icon="gear", icon_size=18,
+            command=self.show_setup,
         ).grid(row=0, column=1, sticky="ew", padx=(4, 0))
-
-        # ── 偏好設定卡：音量、開機啟動 ──
-        prefs = GlassCard(self.main)
-        prefs.grid(row=8, column=0, sticky="ew", padx=30, pady=(12, 0))
-        prefs.grid_columnconfigure(0, weight=1)
-
-        vol_row = ctk.CTkFrame(prefs, fg_color="transparent")
-        vol_row.grid(row=0, column=0, sticky="ew", padx=14, pady=(10, 0))
-        vol_row.grid_columnconfigure(1, weight=1)
-        ctk.CTkLabel(vol_row, text=" 鬧鐘音量", compound="left",
-                     image=IC.icon("bell", 16, T.TEXT_SECONDARY),
-                     font=(T.FONT_FAMILY_UI, 12),
-                     text_color=T.TEXT_SECONDARY).grid(row=0, column=0, padx=(0, 12))
-        self.volume_slider = ctk.CTkSlider(
-            vol_row, from_=0, to=100, number_of_steps=20,
-            command=self._on_volume_drag,
-            button_color=T.MODE_CFG["work"]["color"],
-            button_hover_color=T.MODE_CFG["work"]["hover"],
-            progress_color=T.MODE_CFG["work"]["color"],
-        )
-        self.volume_slider.set(self.settings["volume"])
-        self.volume_slider.grid(row=0, column=1, sticky="ew")
-        self.volume_slider.bind("<ButtonRelease-1>", self._on_volume_release, add="+")
-        self.volume_label = ctk.CTkLabel(
-            vol_row, text=f"{self.settings['volume']}%", width=42, anchor="e",
-            font=(T.FONT_FAMILY_UI, 12, "bold"), text_color=T.TEXT_SECONDARY,
-        )
-        self.volume_label.grid(row=0, column=2, padx=(8, 0))
-
-        self.autostart_switch = ctk.CTkSwitch(
-            prefs, text="開機自動啟動", font=(T.FONT_FAMILY_UI, 12),
-            text_color=T.TEXT_SECONDARY, command=self._on_autostart_toggle,
-            progress_color=T.MODE_CFG["work"]["color"],
-        )
-        self.autostart_switch.grid(row=1, column=0, sticky="w", padx=14, pady=(10, 12))
-        if SU.is_frozen():
-            if SU.is_enabled():
-                self.autostart_switch.select()
-        else:
-            self.autostart_switch.configure(text="開機自動啟動（僅打包版可用）", state="disabled")
 
         # ── 底部：快捷鍵提示 ──
         ctk.CTkLabel(
             self.main, text="空白鍵　開始／暫停　·　R　重置",
             text_color=T.TEXT_MUTED,
             font=(T.FONT_FAMILY_UI, 11),
-        ).grid(row=9, column=0, pady=(12, 14))
+        ).grid(row=8, column=0, pady=(14, 14))
+
+    # ======================================================================
+    # 設定頁
+    # ======================================================================
+    def _build_setup_ui(self) -> None:
+        self.setup_page = SetupPage(
+            self.root,
+            settings=self.settings,
+            sites=self.blocked_sites,
+            autostart_available=SU.is_frozen(),
+            autostart_on=SU.is_frozen() and SU.is_enabled(),
+            on_back=self.hide_setup,
+            on_volume_commit=self._commit_volume,
+            on_autostart=self._set_autostart,
+            on_sites_changed=self._sites_changed,
+            on_restart_admin=self._restart_admin,
+        )
+        self.setup_page.grid(row=0, column=0, sticky="nsew")
+        self.setup_page.grid_remove()
+        # _read_settings 直接讀這兩個輸入框
+        self.work_entry = self.setup_page.work_entry
+        self.break_entry = self.setup_page.break_entry
+
+    def _set_window_size(self, size: tuple[int, int]) -> None:
+        """換頁時調整視窗高度；minsize 要一起改，否則縮不下去。"""
+        w, h = size
+        # 改視窗大小會觸發 <Unmap>，不先解除綁定會被誤判成最小化而跳進迷你模式
+        self.root.unbind("<Unmap>")
+        self.root.resizable(True, True)
+        self.root.minsize(w, h)
+        self.root.geometry(f"{w}x{h}")
+        self.root.resizable(False, False)
+        self.root.after(300, lambda: self.root.bind("<Unmap>", self._on_unmap))
+
+    def show_setup(self, message: str | None = None) -> None:
+        self._in_setup = True
+        self.setup_page.refresh_admin()
+        self.main.grid_remove()
+        self._set_window_size(SETUP_WINDOW_SIZE)
+        self.setup_page.grid()
+        self.setup_page.show_message(message or "")
+
+    def hide_setup(self) -> None:
+        idle = not self.engine.is_running and self.engine.elapsed == 0
+        if not self._read_settings(apply=idle):
+            return  # 輸入無效：已還原並留在設定頁顯示訊息
+        self._in_setup = False
+        self.setup_page.grid_remove()
+        self._set_window_size(MAIN_WINDOW_SIZE)
+        self.main.grid()
+        if idle and self.engine.mode != "overtime":
+            self.ring.set_time(self._format_remaining())
+        self._refresh_banner()
+
+    def _refresh_banner(self) -> None:
+        if self.blocked_sites and not HB.is_admin():
+            self.admin_banner.grid()
+        else:
+            self.admin_banner.grid_remove()
+
+    # 設定頁的回呼
+    def _commit_volume(self, volume: int) -> None:
+        self.settings["volume"] = volume
+        ST.save(self.settings)
+        AL.play(volume)
+
+    def _set_autostart(self, enabled: bool) -> bool:
+        if not SU.set_enabled(enabled):
+            return False
+        self.settings["autostart"] = enabled
+        ST.save(self.settings)
+        return True
+
+    def _sites_changed(self, sites: list[str]) -> None:
+        HB.save_sites(sites)
+        if self._sites_active:
+            self._toggle_block(True)  # 專注中改清單：立刻重新套用
+        self._refresh_banner()
+
+    def _restart_admin(self) -> None:
+        if self.engine.elapsed > 0:
+            self._save_current()
+        if self._sites_active:
+            self._toggle_block(False)
+        if HB.restart_as_admin():
+            self.root.destroy()
+        else:
+            self.setup_page.show_message("無法以管理員身分重新啟動。")
 
     # ======================================================================
     # Mini 視窗
@@ -305,18 +333,18 @@ class PomodoroApp:
         self.root.resizable(False, False)
         self.root.attributes("-topmost", True)  # 迷你視窗一律浮在最上層才有用
         self.main.grid_remove()
+        self.setup_page.grid_remove()
         self.mini.grid()
 
     def _exit_mini(self) -> None:
         self._is_mini = False
         self.root.unbind("<Unmap>")
         self.mini.grid_remove()
-        self.main.grid()
-        w, h = MAIN_WINDOW_SIZE
-        self.root.resizable(True, True)
-        self.root.minsize(w, h)
-        self.root.geometry(f"{w}x{h}")
-        self.root.resizable(False, False)
+        if self._in_setup:
+            self.setup_page.grid()
+        else:
+            self.main.grid()
+        self._set_window_size(SETUP_WINDOW_SIZE if self._in_setup else MAIN_WINDOW_SIZE)
         self.root.attributes("-topmost", self.always_on_top)
         self.root.after(300, lambda: self.root.bind("<Unmap>", self._on_unmap))
 
@@ -546,17 +574,28 @@ class PomodoroApp:
     # ======================================================================
     # 設定 / 紀錄
     # ======================================================================
-    def _read_settings(self) -> bool:
+    def _read_settings(self, apply: bool = True) -> bool:
+        """驗證設定頁的時長並存檔；apply=True 時才套用到計時引擎。
+
+        輸入無效時還原成上次的值，並打開設定頁顯示訊息（不跳視窗）。
+        """
         try:
             w = int(self.work_entry.get())
             b = int(self.break_entry.get())
             if w <= 0 or b <= 0:
                 raise ValueError
-            self.engine.set_durations(w * 60, b * 60)
-            return True
         except ValueError:
-            messagebox.showwarning("設定錯誤", "請輸入有效的正整數分鐘數！", parent=self.root)
+            for entry, key in ((self.work_entry, "work_minutes"), (self.break_entry, "break_minutes")):
+                entry.delete(0, "end")
+                entry.insert(0, str(self.settings[key]))
+            self.show_setup("請輸入有效的正整數分鐘數，已還原為上次的設定。")
             return False
+        if apply:
+            self.engine.set_durations(w * 60, b * 60)
+        if (w, b) != (self.settings["work_minutes"], self.settings["break_minutes"]):
+            self.settings.update(work_minutes=w, break_minutes=b)
+            ST.save(self.settings)
+        return True
 
     def _save_current(self) -> None:
         if self.engine.elapsed == 0:
@@ -582,23 +621,6 @@ class PomodoroApp:
     # ======================================================================
     def _play_alarm(self) -> None:
         AL.play(self.settings["volume"])
-
-    def _on_volume_drag(self, value: float) -> None:
-        self.volume_label.configure(text=f"{int(value)}%")
-
-    def _on_volume_release(self, _event=None) -> None:
-        self.settings["volume"] = int(self.volume_slider.get())
-        ST.save(self.settings)
-        AL.play(self.settings["volume"])
-
-    def _on_autostart_toggle(self) -> None:
-        enabled = bool(self.autostart_switch.get())
-        if SU.set_enabled(enabled):
-            self.settings["autostart"] = enabled
-            ST.save(self.settings)
-        else:
-            self.autostart_switch.toggle()
-            messagebox.showerror("錯誤", "無法修改開機啟動設定。", parent=self.root)
 
     # ======================================================================
     # Always on top
@@ -638,27 +660,11 @@ class PomodoroApp:
             self._sites_active = False
             return
         if enable and not HB.is_admin():
-            ans = messagebox.askyesno(
-                "需要管理員權限",
-                "封鎖網站功能需要以「管理員身分」執行此程式。\n\n是否現在以管理員身分重新啟動？",
-                parent=self.root,
-            )
-            if ans:
-                if HB.restart_as_admin():
-                    self.root.destroy()
+            self._refresh_banner()  # 沒權限就不封鎖；提示列會引導使用者到設定頁處理
             return
         ok = HB.apply_block(self.blocked_sites, enable)
         if ok:
             self._sites_active = enable
-
-    def _open_blocked(self) -> None:
-        open_blocked_sites_window(
-            self.root,
-            sites=self.blocked_sites,
-            on_change=lambda s: HB.save_sites(s),
-            is_active=lambda: self._sites_active,
-            reapply=lambda: self._toggle_block(True),
-        )
 
     # ======================================================================
     # 收尾

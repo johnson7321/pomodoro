@@ -23,7 +23,8 @@ v2.0 已把原本的單檔 `pomodoro_window.py` 拆成 `pomodoro/` 套件，分�
   - `widgets.py` 自訂元件：GlassCard / PillButton / GhostButton / StatusBadge / GlowRing / MinutesEntry
     （GlowRing 的環用 Pillow 超取樣繪成圖片放在 Canvas 底層以消除鋸齒，文字仍是 Canvas 文字）
   - `icons.py` 用 Pillow 畫的單色圖示組（`icon(name, size, color)`）、App 標誌、`apply_window_icon()`
-  - `history_chart.py`、`blocked_sites_window.py` 兩個子視窗
+  - `setup_page.py` 設定頁（整頁，與主頁在同一視窗內切換）：時長、音量、開機啟動、管理員狀態、封鎖網站清單
+  - `history_chart.py` 時間統計子視窗
 
 ## 資產
 
@@ -78,7 +79,10 @@ CSV 格式：`utf-8-sig`，欄位 `時間戳記,活動類型,持續時間`。
    跟這個 venv（20 包）無關，連 `accelerate` 都沒裝。實際第三方依賴只有
    `customtkinter`、`matplotlib`、`numpy`，另外 `Pillow`（圓環繪製；matplotlib 與 customtkinter 已會帶進來）。
 5. 改 `MODE_CFG` 的鍵名時，別漏掉 `history_chart.py` 裡「活動名稱 → 顏色」的對應。
-6. 封鎖網站要管理員權限：`hosts_blocker.apply_block()` 非管理員直接回 False，由 UI 決定是否提示重啟；
+6. 封鎖網站要管理員權限：`hosts_blocker.apply_block()` 非管理員直接回 False。**UI 不跳詢問視窗**：
+   主頁只在「有封鎖清單且沒權限」時顯示一條提示列（`admin_banner`），點了進設定頁，
+   由設定頁的「以管理員身分重新啟動」按鈕處理。錯誤與回饋一律顯示在設定頁內（`show_message`），不用 messagebox。
+   只有「時間到」的繼續／切換選擇與存檔失敗仍用 messagebox；
    它會改 `C:\Windows\System32\drivers\etc\hosts` 並執行 `ipconfig /flushdns`。
 7. **日期歸屬一律走邏輯日。** 時間戳記存的是實體時間（寫入時 `datetime.now()`），但「算哪一天」
    必須用 `logical_date_of()`。曾經用 `ts.startswith(get_logical_date())` 比對，結果 00:00~03:59
@@ -88,6 +92,8 @@ CSV 格式：`utf-8-sig`，欄位 `時間戳記,活動類型,持續時間`。
    所以 `apply_window_icon()` 用 `after(350)`；直接在建構時 `iconbitmap` 會被蓋回藍色預設圖示。
 9. **最小化一律進迷你模式（不需要釘選）。** `<Unmap>` 永遠綁定；迷你視窗自己會置頂，離開後才依釘選狀態決定。
    進出迷你模式必須同步改 `minsize`，否則視窗縮不下去。
+   **改視窗大小本身會觸發 `<Unmap>`**，所以一律走 `_set_window_size()`（先解除綁定、300ms 後再綁回），
+   否則換頁時會被誤判成最小化而跳進迷你模式。主頁與設定頁高度不同（`MAIN_/SETUP_WINDOW_SIZE`），換頁時會調整。
 10. **打包版啟動時 `main.py` 會 `chdir` 到 exe 所在資料夾。** 紀錄檔、`blocked_sites.json`、
    `settings.json` 都用相對路徑；開機自動啟動時工作目錄不是 exe 資料夾，不切過去就會寫到別處。
 

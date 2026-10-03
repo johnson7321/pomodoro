@@ -40,7 +40,7 @@ hiddenimports += [
     'pomodoro.ui.icons',
     'pomodoro.ui.main_window',
     'pomodoro.ui.history_chart',
-    'pomodoro.ui.blocked_sites_window',
+    'pomodoro.ui.setup_page',
 ]
 
 a = Analysis(
