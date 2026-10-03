@@ -4,10 +4,12 @@
 """
 from __future__ import annotations
 
+import math
 import tkinter as tk
 from typing import Callable, Optional, Tuple
 
 import customtkinter as ctk
+from PIL import Image, ImageDraw, ImageFilter, ImageTk
 
 from .. import theme as T
 
@@ -36,6 +38,7 @@ class PillButton(ctk.CTkButton):
         kw.setdefault("height", 44)
         kw.setdefault("font", (T.FONT_FAMILY_UI, 14, "bold"))
         kw.setdefault("text_color", "white")
+        kw.setdefault("text_color_disabled", T.DISABLED_FG)
         super().__init__(master, fg_color=color, hover_color=hover, **kw)
 
 
@@ -74,8 +77,18 @@ class StatusBadge(ctk.CTkLabel):
 # ---------------------------------------------------------------------------
 # 玻璃擬態圓形進度環（含 glow / 軌道 / 中央時間）
 # ---------------------------------------------------------------------------
+def _rgb(color: str) -> Tuple[int, int, int]:
+    return tuple(int(color[i:i + 2], 16) for i in (1, 3, 5))  # type: ignore[return-value]
+
+
 class GlowRing(tk.Canvas):
-    """大型圓環：軟陰影底 + 軌道 + 漸進進度 + 中央時間文字。"""
+    """大型圓環：抗鋸齒軌道 + 圓頭進度弧 + 柔光 + 中央時間文字。
+
+    tk.Canvas 的弧線沒有抗鋸齒，所以環本身用 Pillow 以 4 倍解析度繪製後縮小，
+    再當成一張圖放在 Canvas 底層；文字仍由 Canvas 繪製以保持清晰。
+    """
+
+    _SS = 4  # 超取樣倍率
 
     def __init__(self, master, *, size: int = T.RING_SIZE, thickness: int = T.RING_THICKNESS):
         # 取目前外觀模式對應的 canvas 底色，避免黑色背景
@@ -85,38 +98,94 @@ class GlowRing(tk.Canvas):
                          bg=self._canvas_bg, highlightthickness=0, bd=0)
         self._size = size
         self._thickness = thickness
+        self._ratio = 0.0
+        self._color = T.MODE_CFG["work"]["color"]
+        self._photo = None
+        self._static = None
         self._build()
+
+    # ------------------------------------------------------------------
+    def _make_static(self) -> "Image.Image":
+        """不隨進度變動的底層：光暈、玻璃中央、軌道。只在外觀模式改變時重畫。"""
+        is_dark = ctk.get_appearance_mode() == "Dark"
+        track = T.RING_TRACK[1] if is_dark else T.RING_TRACK[0]
+        halo = "#1B1B23" if is_dark else "#F0EAE5"
+        inner = "#1F1F28" if is_dark else "#FBF9F7"
+        ss, s, pad, t = self._SS, self._size, T.RING_PADDING, self._thickness
+        layer = Image.new("RGBA", (s * ss, s * ss), (0, 0, 0, 0))
+        d = ImageDraw.Draw(layer)
+        d.ellipse([(pad - 6) * ss, (pad - 6) * ss, (s - pad + 6) * ss, (s - pad + 6) * ss],
+                  fill=_rgb(halo))
+        d.ellipse([(pad + 4) * ss, (pad + 4) * ss, (s - pad - 4) * ss, (s - pad - 4) * ss],
+                  fill=_rgb(inner))
+        half = t / 2
+        d.ellipse([(pad - half) * ss, (pad - half) * ss, (s - pad + half) * ss, (s - pad + half) * ss],
+                  outline=_rgb(track), width=t * ss)
+        return layer.resize((s, s), Image.LANCZOS)
+
+    def _render(self) -> None:
+        ss, s, pad, t = self._SS, self._size, T.RING_PADDING, self._thickness
+        bg = Image.new("RGBA", (s, s), _rgb(self._canvas_bg) + (255,))
+        if self._static is None:
+            self._static = self._make_static()
+        bg.alpha_composite(self._static)
+
+        ratio = self._ratio
+        if ratio > 0.001:
+            color = _rgb(self._color)
+            half = t / 2
+            center = s / 2
+            r = s / 2 - pad  # 弧線中心線半徑
+            box = [(pad - half) * ss, (pad - half) * ss, (s - pad + half) * ss, (s - pad + half) * ss]
+            start = -90.0
+
+            def arc_layer(scale: int) -> "Image.Image":
+                # 透明底也填同色：模糊／縮放時才不會混入黑色而產生暗邊
+                lay = Image.new("RGBA", (s * scale, s * scale), color + (0,))
+                dd = ImageDraw.Draw(lay)
+                b = [v * scale / ss for v in box]
+                if ratio >= 0.999:
+                    dd.ellipse(b, outline=color + (255,), width=int(t * scale))
+                else:
+                    dd.arc(b, start, start + 360 * ratio, fill=color + (255,), width=int(t * scale))
+                    for ang in (start, start + 360 * ratio):
+                        x = center + r * math.cos(math.radians(ang))
+                        y = center + r * math.sin(math.radians(ang))
+                        rr = half * scale
+                        dd.ellipse([x * scale - rr, y * scale - rr, x * scale + rr, y * scale + rr],
+                                   fill=color + (255,))
+                return lay
+
+            # 柔光：低解析度繪製後模糊，墊在進度弧下方
+            glow = arc_layer(1).filter(ImageFilter.GaussianBlur(9))
+            glow.putalpha(glow.getchannel("A").point(lambda a: int(a * 0.85)))
+            bg.alpha_composite(glow)
+            bg.alpha_composite(arc_layer(ss).resize((s, s), Image.LANCZOS))
+
+            # 進度尖端的小亮點
+            if ratio < 0.999:
+                ang = math.radians(start + 360 * ratio)
+                x = center + r * math.cos(ang)
+                y = center + r * math.sin(ang)
+                dot = Image.new("RGBA", (s * ss, s * ss), (255, 255, 255, 0))
+                rr = t * 0.22 * ss
+                ImageDraw.Draw(dot).ellipse(
+                    [x * ss - rr, y * ss - rr, x * ss + rr, y * ss + rr], fill=(255, 255, 255, 235))
+                bg.alpha_composite(dot.resize((s, s), Image.LANCZOS))
+
+        self._photo = ImageTk.PhotoImage(bg.convert("RGB"))
+        self.itemconfig(self._img_id, image=self._photo)
 
     # ------------------------------------------------------------------
     def _build(self) -> None:
         is_dark = ctk.get_appearance_mode() == "Dark"
-        track = T.RING_TRACK[1] if is_dark else T.RING_TRACK[0]
         text_color = T.TEXT_PRIMARY[1] if is_dark else T.TEXT_PRIMARY[0]
         sub_color = T.TEXT_MUTED[1] if is_dark else T.TEXT_MUTED[0]
 
-        pad = T.RING_PADDING
         s = self._size
-        self._arc_box = (pad, pad, s - pad, s - pad)
-
-        # 內陰影感：淡淡的更外圈淺底（softer halo）
-        halo_color = "#F0EAE5" if not is_dark else "#1B1B23"
-        self.create_oval(pad - 6, pad - 6, s - pad + 6, s - pad + 6,
-                          outline="", fill=halo_color)
-        # 內圈白底（玻璃中央）
-        inner_color = "#FBF9F7" if not is_dark else "#1F1F28"
-        self.create_oval(pad + 4, pad + 4, s - pad - 4, s - pad - 4,
-                          outline="", fill=inner_color)
-
-        # 軌道
-        self.create_arc(*self._arc_box, start=90, extent=-359.9,
-                         style=tk.ARC, width=self._thickness, outline=track)
-
-        # 進度弧
-        self._arc_id = self.create_arc(
-            *self._arc_box, start=90, extent=0,
-            style=tk.ARC, width=self._thickness,
-            outline=T.MODE_CFG["work"]["color"],
-        )
+        self._static = None
+        self._img_id = self.create_image(0, 0, anchor="nw")
+        self._render()
 
         cx, cy = s // 2, s // 2
 
@@ -140,10 +209,16 @@ class GlowRing(tk.Canvas):
     # ------------------------------------------------------------------
     def set_progress(self, ratio: float) -> None:
         ratio = max(0.0, min(1.0, ratio))
-        self.itemconfig(self._arc_id, extent=-ratio * 359.9)
+        if abs(ratio - self._ratio) < 0.0005:
+            return
+        self._ratio = ratio
+        self._render()
 
     def set_color(self, color: str) -> None:
-        self.itemconfig(self._arc_id, outline=color)
+        if color == self._color:
+            return
+        self._color = color
+        self._render()
 
     def set_time(self, text: str) -> None:
         self.itemconfig(self._time_id, text=text)
@@ -158,6 +233,7 @@ class GlowRing(tk.Canvas):
         self._canvas_bg = T.BG_PRIMARY[1] if is_dark else T.BG_PRIMARY[0]
         self.configure(bg=self._canvas_bg)
         self._build()
+        # _build 重畫文字，保留目前進度與顏色（_render 已使用 self._ratio / self._color）
 
 
 # ---------------------------------------------------------------------------

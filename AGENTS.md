@@ -21,6 +21,7 @@ v2.0 已把原本的單檔 `pomodoro_window.py` 拆成 `pomodoro/` 套件，分�
 - `pomodoro/ui/` — customtkinter 畫面
   - `main_window.py` 主視窗，最大的檔，把 core 三者串起來
   - `widgets.py` 自訂元件：GlassCard / PillButton / GhostButton / StatusBadge / GlowRing / MinutesEntry
+    （GlowRing 的環用 Pillow 超取樣繪成圖片放在 Canvas 底層以消除鋸齒，文字仍是 Canvas 文字）
   - `history_chart.py`、`blocked_sites_window.py` 兩個子視窗
 
 ## 入口
@@ -66,7 +67,7 @@ CSV 格式：`utf-8-sig`，欄位 `時間戳記,活動類型,持續時間`。
    要換紀錄檔得從 cwd 下手。
 4. **不要跑 `pip install -r requirements.txt`。** 那是 233 包、UTF-16LE 編碼的全環境 freeze，
    跟這個 venv（20 包）無關，連 `accelerate` 都沒裝。實際第三方依賴只有
-   `customtkinter`、`matplotlib`、`numpy`。
+   `customtkinter`、`matplotlib`、`numpy`，另外 `Pillow`（圓環繪製；matplotlib 與 customtkinter 已會帶進來）。
 5. 改 `MODE_CFG` 的鍵名時，別漏掉 `history_chart.py` 裡「活動名稱 → 顏色」的對應。
 6. 封鎖網站要管理員權限：`hosts_blocker.apply_block()` 非管理員直接回 False，由 UI 決定是否提示重啟；
    它會改 `C:\Windows\System32\drivers\etc\hosts` 並執行 `ipconfig /flushdns`。

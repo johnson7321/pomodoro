@@ -13,7 +13,6 @@ from ..config import (
     BLOCKED_SITES_FILE,
     DEFAULT_BREAK_MINUTES,
     DEFAULT_WORK_MINUTES,
-    LOG_FILE,
     MAIN_WINDOW_SIZE,
     MINI_WINDOW_SIZE,
 )
@@ -69,6 +68,7 @@ class PomodoroApp:
         self.root.grid_rowconfigure(0, weight=1)
         self._build_main_ui()
         self._build_mini_ui()
+        self._apply_mode_ui("work")
 
         # 套用 Win11 mica（失敗會 silently 回 fallback 純色）
         self._apply_glass_effect()
@@ -162,95 +162,106 @@ class PomodoroApp:
         btn_row = ctk.CTkFrame(self.main, fg_color="transparent")
         btn_row.grid(row=4, column=0, pady=4)
 
-        btn_kw = dict(width=104, height=44)
+        # 主次分明：「開始」最寬、最醒目；「暫停」次之；「重置」只留外框，避免與主動作搶焦點
         self.btn_start = PillButton(
             btn_row, text="▶  開始",
             color=T.MODE_CFG["work"]["color"],
             hover=T.MODE_CFG["work"]["hover"],
-            command=self.start_timer, **btn_kw,
+            text_color=T.ON_ACCENT,
+            command=self.start_timer, width=148, height=46,
         )
-        self.btn_start.pack(side="left", padx=6)
+        self.btn_start.pack(side="left", padx=5)
 
         self.btn_pause = PillButton(
             btn_row, text="⏸  暫停",
-            color="#7A7A86", hover="#5C5C66",
-            command=self.pause_timer, **btn_kw,
+            color=T.DISABLED_BG, hover="#C97900",
+            text_color=T.ON_AMBER,
+            command=self.pause_timer, width=104, height=46,
         )
         self.btn_pause.configure(state="disabled")
-        self.btn_pause.pack(side="left", padx=6)
+        self.btn_pause.pack(side="left", padx=5)
 
-        self.btn_reset = PillButton(
-            btn_row, text="↺  重置",
-            color=T.DANGER, hover=T.DANGER_HOVER,
-            command=self.reset_timer, **btn_kw,
+        self.btn_reset = GhostButton(
+            btn_row, text="↺  重置", width=92, height=46, corner_radius=23,
+            text_color=T.TEXT_SECONDARY,
+            hover_color=("#FBE3E3", "#3A1A1E"),
+            command=self.reset_timer,
         )
-        self.btn_reset.pack(side="left", padx=6)
+        self.btn_reset.pack(side="left", padx=5)
 
-        # ── 計數 ──
+        # ── 計數：主資訊（完成次數）與輔助資訊（邏輯日區間）分兩行 ──
         self.count_label = ctk.CTkLabel(
             self.main, text="🍅 完成 0 次專注",
-            font=(T.FONT_FAMILY_UI, 12),
-            text_color=T.TEXT_SECONDARY,
+            font=(T.FONT_FAMILY_UI, 14, "bold"),
+            text_color=T.TEXT_PRIMARY,
         )
-        self.count_label.grid(row=5, column=0, pady=(6, 4))
-
-        # ── 分隔線 ──
-        ctk.CTkFrame(self.main, height=1, fg_color=T.DIVIDER).grid(
-            row=6, column=0, sticky="ew", padx=30, pady=8,
+        self.count_label.grid(row=5, column=0, pady=(10, 0))
+        self.day_label = ctk.CTkLabel(
+            self.main, text="",
+            font=(T.FONT_FAMILY_UI, 11),
+            text_color=T.TEXT_MUTED,
         )
+        self.day_label.grid(row=6, column=0, pady=(0, 6))
 
-        # ── 動作按鈕區 ──
+        # ── 功能入口：兩顆並排的次要按鈕 ──
         action_col = ctk.CTkFrame(self.main, fg_color="transparent")
-        action_col.grid(row=7, column=0, sticky="ew", padx=30)
-        action_col.grid_columnconfigure(0, weight=1)
+        action_col.grid(row=7, column=0, sticky="ew", padx=30, pady=(4, 0))
+        action_col.grid_columnconfigure((0, 1), weight=1, uniform="act")
 
         GhostButton(
             action_col, text="📊  時間統計",
             command=lambda: open_history_chart(self.root),
-        ).grid(row=0, column=0, sticky="ew", pady=(0, 6))
+        ).grid(row=0, column=0, sticky="ew", padx=(0, 4))
 
         GhostButton(
-            action_col, text="🚫  封鎖網站設定",
+            action_col, text="🚫  封鎖網站",
             command=self._open_blocked,
-        ).grid(row=1, column=0, sticky="ew", pady=(0, 6))
+        ).grid(row=0, column=1, sticky="ew", padx=(4, 0))
 
-        # ── 音量 ──
-        vol_row = ctk.CTkFrame(action_col, fg_color="transparent")
-        vol_row.grid(row=2, column=0, sticky="ew", pady=(6, 2))
+        # ── 偏好設定卡：音量、開機啟動 ──
+        prefs = GlassCard(self.main)
+        prefs.grid(row=8, column=0, sticky="ew", padx=30, pady=(12, 0))
+        prefs.grid_columnconfigure(0, weight=1)
+
+        vol_row = ctk.CTkFrame(prefs, fg_color="transparent")
+        vol_row.grid(row=0, column=0, sticky="ew", padx=14, pady=(10, 0))
         vol_row.grid_columnconfigure(1, weight=1)
         ctk.CTkLabel(vol_row, text="🔔 鬧鐘音量", font=(T.FONT_FAMILY_UI, 12),
-                     text_color=T.TEXT_SECONDARY).grid(row=0, column=0, padx=(2, 10))
+                     text_color=T.TEXT_SECONDARY).grid(row=0, column=0, padx=(0, 12))
         self.volume_slider = ctk.CTkSlider(
             vol_row, from_=0, to=100, number_of_steps=20,
             command=self._on_volume_drag,
+            button_color=T.MODE_CFG["work"]["color"],
+            button_hover_color=T.MODE_CFG["work"]["hover"],
+            progress_color=T.MODE_CFG["work"]["color"],
         )
         self.volume_slider.set(self.settings["volume"])
         self.volume_slider.grid(row=0, column=1, sticky="ew")
         self.volume_slider.bind("<ButtonRelease-1>", self._on_volume_release, add="+")
         self.volume_label = ctk.CTkLabel(
-            vol_row, text=f"{self.settings['volume']}%", width=40,
-            font=(T.FONT_FAMILY_UI, 12), text_color=T.TEXT_SECONDARY,
+            vol_row, text=f"{self.settings['volume']}%", width=42, anchor="e",
+            font=(T.FONT_FAMILY_UI, 12, "bold"), text_color=T.TEXT_SECONDARY,
         )
-        self.volume_label.grid(row=0, column=2, padx=(8, 2))
+        self.volume_label.grid(row=0, column=2, padx=(8, 0))
 
-        # ── 開機自動啟動 ──
         self.autostart_switch = ctk.CTkSwitch(
-            action_col, text="開機自動啟動", font=(T.FONT_FAMILY_UI, 12),
+            prefs, text="開機自動啟動", font=(T.FONT_FAMILY_UI, 12),
             text_color=T.TEXT_SECONDARY, command=self._on_autostart_toggle,
+            progress_color=T.MODE_CFG["work"]["color"],
         )
-        self.autostart_switch.grid(row=3, column=0, sticky="w", padx=2, pady=(6, 0))
+        self.autostart_switch.grid(row=1, column=0, sticky="w", padx=14, pady=(10, 12))
         if SU.is_frozen():
             if SU.is_enabled():
                 self.autostart_switch.select()
         else:
             self.autostart_switch.configure(text="開機自動啟動（僅打包版可用）", state="disabled")
 
-        # ── 底部 ──
+        # ── 底部：快捷鍵提示 ──
         ctk.CTkLabel(
-            self.main, text=f"紀錄檔：{LOG_FILE}",
+            self.main, text="空白鍵　開始／暫停　·　R　重置",
             text_color=T.TEXT_MUTED,
-            font=(T.FONT_FAMILY_MONO, 10),
-        ).grid(row=8, column=0, pady=(8, 14))
+            font=(T.FONT_FAMILY_UI, 11),
+        ).grid(row=9, column=0, pady=(12, 14))
 
     # ======================================================================
     # Mini 視窗
@@ -350,6 +361,7 @@ class PomodoroApp:
             self._schedule_tick()
         else:
             self._set_buttons_idle()
+        self.ring.set_sub(self._state_text())
 
     def _enter_overtime(self, kind: str) -> None:
         """時間到 → 進入超時累加狀態，並立刻讓 tick 繼續跑。
@@ -376,12 +388,23 @@ class PomodoroApp:
             return T.OVERTIME_KEYS.get(self.engine.overtime_kind, "overtime_break")
         return self.engine.mode
 
+    def _state_text(self) -> str:
+        """圓環下方的狀態文字：準備開始 / 專注中 / 已暫停 / 超時專注中…"""
+        name = T.MODE_CFG[self._mode_key()]["name"]
+        if self.engine.mode == "overtime":
+            return f"{name}中"
+        if self.engine.is_running:
+            return f"{name}中"
+        if self.engine.elapsed > 0:
+            return "已暫停"
+        return "準備開始"
+
     def _apply_mode_ui(self, key: str) -> None:
         cfg = T.MODE_CFG[key]
         label = f"{cfg['icon']}  {cfg['name']}"
         self.status_badge.set_mode(label, cfg["badge_light"], cfg["badge_dark"])
         self.ring.set_color(cfg["color"])
-        self.ring.set_sub(cfg["name"])
+        self.ring.set_sub(self._state_text())
 
         # 開始按鈕底色跟著模式變（超時狀態下按鈕已被停用，不需換色）
         if key not in ("overtime_work", "overtime_break"):
@@ -406,6 +429,7 @@ class PomodoroApp:
             self._toggle_block(True)
         self.engine.start()
         self._set_buttons_running()
+        self.ring.set_sub(self._state_text())
         self._schedule_tick()
 
     def pause_timer(self) -> None:
@@ -414,8 +438,10 @@ class PomodoroApp:
         self._cancel_tick()
         self.engine.pause()
         cfg = T.MODE_CFG[self._mode_key()]
-        self.btn_start.configure(state="normal", fg_color=cfg["color"], hover_color=cfg["hover"])
-        self.btn_pause.configure(state="disabled", fg_color="#7A7A86", text="⏸  已暫停")
+        self.btn_start.configure(state="normal", fg_color=cfg["color"],
+                                  hover_color=cfg["hover"], text="▶  繼續")
+        self.btn_pause.configure(state="disabled", fg_color=T.DISABLED_BG, text="⏸  暫停")
+        self.ring.set_sub(self._state_text())
 
     def reset_timer(self) -> None:
         self._cancel_tick()
@@ -497,15 +523,15 @@ class PomodoroApp:
     # UI 狀態切換
     # ======================================================================
     def _set_buttons_running(self) -> None:
-        self.btn_start.configure(state="disabled", fg_color="#7A7A86")
+        self.btn_start.configure(state="disabled", fg_color=T.DISABLED_BG, text="▶  開始")
         self.btn_pause.configure(state="normal", fg_color=T.PAUSE_COLOR,
                                   hover_color="#C97900", text="⏸  暫停")
 
     def _set_buttons_idle(self) -> None:
         cfg = T.MODE_CFG[self._mode_key()]
         self.btn_start.configure(state="normal", fg_color=cfg["color"],
-                                  hover_color=cfg["hover"])
-        self.btn_pause.configure(state="disabled", fg_color="#7A7A86",
+                                  hover_color=cfg["hover"], text="▶  開始")
+        self.btn_pause.configure(state="disabled", fg_color=T.DISABLED_BG,
                                   text="⏸  暫停")
 
     # ======================================================================
@@ -539,7 +565,8 @@ class PomodoroApp:
     def _update_count_label(self) -> None:
         # 顯示邏輯日的實際區間，而不是含糊的「今日」（凌晨 0~4 點算前一天）
         span = CL.format_logical_day_window(CL.get_logical_date())
-        self.count_label.configure(text=f"🍅 {span}　完成 {self.work_count} 次專注")
+        self.count_label.configure(text=f"🍅 完成 {self.work_count} 次專注")
+        self.day_label.configure(text=span)
 
     # ======================================================================
     # 鬧鐘

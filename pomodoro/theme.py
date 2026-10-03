@@ -33,7 +33,16 @@ DIVIDER = ("#EBE6E2", "#2A2A34")
 # 文字
 TEXT_PRIMARY = ("#1A1A20", "#F0F0F4")
 TEXT_SECONDARY = ("#5C5C66", "#A8A8B4")
-TEXT_MUTED = ("#8A8A94", "#7A7A86")
+TEXT_MUTED = ("#6E6E78", "#9494A1")
+
+# 停用狀態的按鈕：用比卡片更深／更淺的中性底色，一眼看出不能按
+DISABLED_BG = ("#DDD7D2", "#30303B")
+DISABLED_FG = ("#8A8A94", "#6C6C79")
+
+# 琥珀色按鈕上的深色文字（白字在 #FAB005 上對比不足）
+ON_AMBER = "#2A1E00"
+# 亮色模式底色上的深色按鈕文字（珊瑚紅／海洋藍底配白字對比不足）
+ON_ACCENT = "#1A1A20"
 
 # 進度環軌道
 RING_TRACK = ("#E8E2DD", "#2D2D38")
