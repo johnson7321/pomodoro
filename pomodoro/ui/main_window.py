@@ -19,6 +19,7 @@ from ..core import win11_effects as W11
 from ..core.timer_engine import TimerEngine
 from . import icons as IC
 from .history_chart import open_history_chart
+from .mini_view import MiniView
 from .setup_page import SetupPage
 from .widgets import GhostButton, GlowRing, RoundIconButton
 
@@ -241,26 +242,25 @@ class PomodoroApp:
     # Mini 視窗
     # ======================================================================
     def _build_mini_ui(self) -> None:
-        self.mini = ctk.CTkFrame(
-            self.root,
-            fg_color=T.MODE_CFG["work"]["color"],
-            corner_radius=0,
-        )
+        self.mini = MiniView(self.root)
         self.mini.grid(row=0, column=0, sticky="nsew")
         self.mini.grid_remove()
-
-        self._mini_label = ctk.CTkLabel(
-            self.mini, text=self._format_remaining(),
-            font=(T.FONT_FAMILY_DIGIT, 38, "bold"),
-            text_color="white",
-        )
-        self._mini_label.pack(expand=True)
+        self.mini.set_time(self._format_remaining())
 
         # 沒有標題列可以拖，所以整個迷你視窗都能拖曳移動；沒有移動的單擊才還原成主視窗
-        for w in (self.mini, self._mini_label):
-            w.bind("<ButtonPress-1>", self._mini_press)
-            w.bind("<B1-Motion>", self._mini_drag)
-            w.bind("<ButtonRelease-1>", self._mini_release)
+        self.mini.bind("<ButtonPress-1>", self._mini_press)
+        self.mini.bind("<B1-Motion>", self._mini_drag)
+        self.mini.bind("<ButtonRelease-1>", self._mini_release)
+
+    def _sync_mini(self) -> None:
+        """把目前的模式／狀態／進度同步到迷你畫面（狀態改變時由 _refresh_primary 呼叫）。"""
+        if not hasattr(self, "mini"):
+            return
+        cfg = T.MODE_CFG[self._mode_key()]
+        self.mini.set_label(self._state_text() or cfg["name"])
+        self.mini.set_progress(self.engine.progress())
+        if self._is_mini:
+            self._paint_mini(cfg["color"])
 
     def _mini_press(self, e) -> None:
         self._mini_origin = (e.x_root, e.y_root, self.root.winfo_x(), self.root.winfo_y())
@@ -284,8 +284,9 @@ class PomodoroApp:
         self.root.update_idletasks()
         x, y = self.root.winfo_rootx(), self.root.winfo_rooty()
         self._is_mini = True
-        self._mini_label.configure(text=self.ring.itemcget(self.ring._time_id, "text"))  # noqa
+        self.mini.set_time(self.ring.itemcget(self.ring._time_id, "text"))  # noqa
         self._paint_mini(T.MODE_CFG[self._mode_key()]["color"])
+        self._sync_mini()
         w, h = MINI_WINDOW_SIZE
         self.root.resizable(True, True)
         # 主視窗啟動時設了 minsize，不先放寬的話 geometry 縮不下去
@@ -298,6 +299,13 @@ class PomodoroApp:
         self.setup_page.grid_remove()
         self.mini.grid()
         self.root.focus_force()  # 無邊框視窗不會自動取得焦點，快捷鍵才收得到
+        # Win11：圓角、隱藏細邊框。剛調整大小時 DWM 可能忽略，稍後再套一次
+        self._style_mini_frame()
+        self.root.after(120, lambda: self._is_mini and self._style_mini_frame())
+
+    def _style_mini_frame(self) -> None:
+        W11.set_round_corners(self.root, True)
+        W11.set_border(self.root, hidden=True)
 
     def _exit_mini(self) -> None:
         self._is_mini = False
@@ -319,13 +327,14 @@ class PomodoroApp:
         self.root.withdraw()
         self.root.deiconify()
         self.root.attributes("-topmost", self.always_on_top)
+        W11.set_border(self.root, hidden=False)
         self._apply_glass_effect()  # 標題列深色與 mica 要在重新顯示後再套一次
         IC.apply_window_icon(self.root)
         self.root.after(300, lambda: self.root.bind("<Unmap>", self._on_unmap))
 
     def _paint_mini(self, color: str) -> None:
-        """迷你模式：框與視窗底色都換成模式色，讓顏色鋪滿整個視窗。"""
-        self.mini.configure(fg_color=color)
+        """迷你模式：畫面漸層與視窗底色都跟著模式色，圓角外的底色才不會露出別的顏色。"""
+        self.mini.set_color(color)
         self.root.configure(fg_color=color)
 
     def _unpaint_mini(self) -> None:
@@ -491,7 +500,8 @@ class PomodoroApp:
             text = CL.format_duration(remaining)
         self.ring.set_time(text)
         if self._is_mini:
-            self._mini_label.configure(text=text)
+            self.mini.set_time(text)
+            self.mini.set_progress(self.engine.progress())
         self.ring.set_progress(self.engine.progress())
 
     def _on_engine_complete(self, mode) -> None:
@@ -543,6 +553,7 @@ class PomodoroApp:
             self.btn_main.set_style(
                 icon="play", fill=cfg["color"], hover_fill=cfg["hover"], icon_color=T.ON_ACCENT,
             )
+        self._sync_mini()
 
     # ======================================================================
     # 設定 / 紀錄

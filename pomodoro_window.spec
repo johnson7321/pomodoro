@@ -38,6 +38,7 @@ hiddenimports += [
     'pomodoro.ui',
     'pomodoro.ui.widgets',
     'pomodoro.ui.icons',
+    'pomodoro.ui.mini_view',
     'pomodoro.ui.main_window',
     'pomodoro.ui.history_chart',
     'pomodoro.ui.setup_page',

@@ -25,6 +25,7 @@ v2.0 已把原本的單檔 `pomodoro_window.py` 拆成 `pomodoro/` 套件，分�
   - `icons.py` 用 Pillow 畫的單色圖示組（`icon(name, size, color)`）、App 標誌、`apply_window_icon()`
   - `setup_page.py` 設定頁（整頁，與主頁在同一視窗內切換，左右兩欄）：時長、音量、快捷鍵說明（`SHORTCUTS`）、
     開機啟動、管理員狀態、封鎖網站清單。**主頁只留計時操作，所有設定與說明文字都放這裡。**
+  - `mini_view.py` 迷你模式畫面（Canvas：模式色漸層底、狀態小字、大時間、底部進度條）
   - `history_chart.py` 時間統計子視窗（摘要卡 + 每小時堆疊長條圖；matplotlib 圖的底色要取卡片色 `BG_GLASS_SOLID`，否則會看到色塊）
 
 ## 資產
@@ -96,12 +97,15 @@ CSV 格式：`utf-8-sig`，欄位 `時間戳記,活動類型,持續時間`。
 10. **圖示按鈕的 customtkinter 陷阱。** `CTkButton` 帶圖示時，左右會各留「圓角半徑」寬的內距，圓角大就被撐寬，
    做不出正圓；而且 `configure(image=...)` 不會重畫，圖示標籤要等重畫才建立（第一次要 `require_redraw=True`）。
    所以主頁的播放／暫停與重置用 `RoundIconButton`：整顆圓用 Pillow 畫成圖片，圓角為 0、滑過時換圖；
-   自訂 CTkButton 子類時，不要用 `_image`、`_hover`、`_size` 這類 CTkButton 內部已有的屬性名。
+   自訂 CTkButton 子類時，不要用 `_image`、`_hover`、`_size` 這類 CTkButton 內部已有的屬性名；
+   `tk.Canvas` 子類也一樣不能用 `_w`（Tk 的元件路徑名稱），否則會出現 `invalid command name "220"`。
    播放／暫停是同一顆按鈕，由 `_refresh_primary()` 依 `engine.is_running` 換圖示與顏色；任何改變計時狀態的地方都要呼叫它。
 11. **最小化一律進迷你模式（不需要釘選）。** `<Unmap>` 永遠綁定；迷你視窗自己會置頂，離開後才依釘選狀態決定。
    進出迷你模式必須同步改 `minsize`，否則視窗縮不下去。
    **迷你模式是無邊框視窗（`overrideredirect(True)`），不顯示標題列**（沒有應用程式名稱、最小化、關閉鈕），
-   底色鋪滿整個視窗：`_paint_mini` 把框（無圓角）與 root 底色換成模式色，離開時 `_unpaint_mini` 還原。
+   畫面由 `MiniView` 負責：`_sync_mini()` 同步狀態文字／進度／顏色（狀態改變時由 `_refresh_primary` 呼叫），
+   每秒 tick 只更新時間與進度條。`_paint_mini` 讓漸層與 root 底色跟著模式色（圓角外才不會露出別的顏色），離開時 `_unpaint_mini` 還原。
+   Win11 圓角與隱藏系統細邊框走 `win11_effects.set_round_corners / set_border`（舊系統靜默略過），進入時要再補套一次。
    因為沒有標題列：整個迷你視窗可拖曳移動（`_mini_press/_drag/_release`），沒有移動的單擊才還原；
    進入時要 `focus_force()`，無邊框視窗不會自動取得焦點，快捷鍵才收得到。
    離開時 `overrideredirect(False)` 之後必須 `withdraw()` + `deiconify()` 框架才會回來，
