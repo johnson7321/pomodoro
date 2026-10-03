@@ -13,6 +13,7 @@ def load(path: str = SETTINGS_FILE) -> dict:
         "autostart": True,
         "work_minutes": DEFAULT_WORK_MINUTES,
         "break_minutes": DEFAULT_BREAK_MINUTES,
+        "mini_pos": None,  # 迷你視窗上次被拖到的位置 [x, y]
     }
     try:
         if os.path.exists(path):
@@ -21,6 +22,9 @@ def load(path: str = SETTINGS_FILE) -> dict:
             vol = int(saved.get("volume", data["volume"]))
             data["volume"] = max(0, min(100, vol))
             data["autostart"] = bool(saved.get("autostart", data["autostart"]))
+            pos = saved.get("mini_pos")
+            if isinstance(pos, list) and len(pos) == 2:
+                data["mini_pos"] = [int(pos[0]), int(pos[1])]
             for key in ("work_minutes", "break_minutes"):
                 minutes = int(saved.get(key, data[key]))
                 if minutes > 0:

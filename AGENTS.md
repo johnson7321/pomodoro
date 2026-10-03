@@ -101,7 +101,8 @@ CSV 格式：`utf-8-sig`，欄位 `時間戳記,活動類型,持續時間`。
    自訂 CTkButton 子類時，不要用 `_image`、`_hover`、`_size` 這類 CTkButton 內部已有的屬性名；
    `tk.Canvas` 子類也一樣不能用 `_w`（Tk 的元件路徑名稱），否則會出現 `invalid command name "220"`。
    播放／暫停是同一顆按鈕，由 `_refresh_primary()` 依 `engine.is_running` 換圖示與顏色；任何改變計時狀態的地方都要呼叫它。
-11. **最小化一律進迷你模式（不需要釘選）。** `<Unmap>` 永遠綁定；迷你視窗自己會置頂，離開後才依釘選狀態決定。
+11. **只有釘選（置頂）時最小化才進迷你模式；沒釘選就是一般最小化。** `_on_unmap` 只在 `always_on_top` 時才進迷你（M 鍵不受限）。迷你視窗位置獨立：進入時記下主視窗位置 `_main_pos`，離開時回到那裡；
+   迷你視窗位置用上次拖曳的 `settings["mini_pos"]`（螢幕外則退回主視窗位置）。
    進出迷你模式必須同步改 `minsize`，否則視窗縮不下去。
    **迷你模式是無邊框視窗（`overrideredirect(True)`），不顯示標題列**（沒有應用程式名稱、最小化、關閉鈕），
    畫面由 `MiniView` 負責：`_sync_mini()` 同步狀態文字／進度／顏色（狀態改變時由 `_refresh_primary` 呼叫），

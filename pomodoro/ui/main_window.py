@@ -334,11 +334,15 @@ class PomodoroApp:
     def _mini_release(self, _e) -> None:
         if not self._mini_moved:
             self._exit_mini()
+        else:  # 記住使用者拖到哪裡，下次進迷你模式就放在那
+            self.settings["mini_pos"] = [self.root.winfo_x(), self.root.winfo_y()]
+            ST.save(self.settings)
 
     def _enter_mini(self) -> None:
         self.root.deiconify()
         self.root.update_idletasks()
-        x, y = self.root.winfo_rootx(), self.root.winfo_rooty()
+        self._main_pos = (self.root.winfo_x(), self.root.winfo_y())  # 離開時回到這裡，不受迷你位置影響
+        x, y = self._mini_start_pos()
         self._is_mini = True
         self.mini.set_time(self.ring.itemcget(self.ring._time_id, "text"))  # noqa
         self._paint_mini(T.MODE_CFG[self._mode_key()]["color"])
@@ -359,6 +363,15 @@ class PomodoroApp:
         self._style_mini_frame()
         self.root.after(120, lambda: self._is_mini and self._style_mini_frame())
 
+    def _mini_start_pos(self) -> tuple[int, int]:
+        """上次拖曳的位置（仍在螢幕內才採用），否則沿用主視窗位置。"""
+        pos = self.settings.get("mini_pos")
+        if pos:
+            w, h = MINI_WINDOW_SIZE
+            if 0 <= pos[0] <= self.root.winfo_screenwidth() - w and 0 <= pos[1] <= self.root.winfo_screenheight() - h:
+                return pos[0], pos[1]
+        return self._main_pos
+
     def _style_mini_frame(self) -> None:
         W11.set_round_corners(self.root, True)
         W11.set_border(self.root, hidden=True)
@@ -367,7 +380,7 @@ class PomodoroApp:
         self._is_mini = False
         self._unpaint_mini()
         self.root.unbind("<Unmap>")
-        x, y = self.root.winfo_x(), self.root.winfo_y()
+        x, y = self._main_pos
         self.mini.grid_remove()
         if self._in_setup:
             self.setup_page.grid()
@@ -397,7 +410,8 @@ class PomodoroApp:
         self.root.configure(fg_color=T.BG_PRIMARY)
 
     def _on_unmap(self, event) -> None:
-        if event.widget is self.root and not self._is_mini:
+        # 只有釘選（置頂）時，最小化才進迷你模式；沒釘選就是一般最小化到工作列
+        if event.widget is self.root and not self._is_mini and self.always_on_top:
             self.root.after(1, self._enter_mini)
 
     # ======================================================================
