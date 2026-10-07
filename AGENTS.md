@@ -30,7 +30,7 @@ v2.0 已把原本的單檔 `pomodoro_window.py` 拆成 `pomodoro/` 套件，分�
   - `icons.py` 用 Pillow 畫的單色圖示組（`icon(name, size, color)`）、App 標誌、`apply_window_icon()`
   - `setup_page.py` 設定頁（整頁，與主頁在同一視窗內切換，左右兩欄）：時長、音量、快捷鍵說明（`SHORTCUTS`）、
     開機啟動、管理員狀態、封鎖網站清單。**主頁只留計時操作，所有設定與說明文字都放這裡。**
-  - `todo_page.py` 待辦頁（整頁，與設定頁同樣在視窗內切換）：今日計畫、新增、清單（預估番茄±、「今日」、設為目前任務、刪除）。
+  - `todo_page.py` 待辦頁（整頁，與設定頁同樣在視窗內切換）：今日計畫、新增、清單（預估番茄下拉選單、「今日」、設為目前任務、刪除）。
     「目前任務」存 `settings["current_task"]`，專注段落完成時 `_on_engine_complete` 呼叫 `record_pomodoro()` 記一個番茄；主頁左上只在有目前任務時顯示「目前：xxx」
   - `mini_view.py` 迷你模式畫面（Canvas：模式色漸層底、狀態小字、大時間、底部進度條）
   - `history_chart.py` 時間統計子視窗（摘要卡 + 每小時堆疊長條圖；matplotlib 圖的底色要取卡片色 `BG_GLASS_SOLID`，否則會看到色塊）

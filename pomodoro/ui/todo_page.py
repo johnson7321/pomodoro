@@ -130,8 +130,8 @@ class TodoPage(ctk.CTkFrame):
         self.add_entry.bind("<Return>", lambda e: self._add())
         ctk.CTkLabel(row, text="預估番茄", font=(T.FONT_FAMILY_UI, 12),
                      text_color=T.TEXT_SECONDARY).grid(row=0, column=1, padx=(10, 6))
-        self.est_entry = MinutesEntry(row, 1, width=44, height=38)
-        self.est_entry.grid(row=0, column=2)
+        self.est_menu = self._est_menu(row, 1, height=38, width=68)
+        self.est_menu.grid(row=0, column=2)
         PillButton(row, text="加入", color=T.MODE_CFG["work"]["color"], hover=T.MODE_CFG["work"]["hover"],
                    width=64, height=38, corner_radius=12, command=self._add).grid(row=0, column=3, padx=(10, 0))
 
@@ -139,10 +139,7 @@ class TodoPage(ctk.CTkFrame):
         text = self.add_entry.get().strip()
         if not text:
             return
-        try:
-            est = max(1, min(int(self.est_entry.get()), 20))
-        except ValueError:
-            est = 1
+        est = int(self.est_menu.get())
         self.items.append(TD.new_item(text, est, today=True))  # 新增的預設就排進今天
         self.add_entry.delete(0, "end")
         self._changed()
@@ -181,11 +178,10 @@ class TodoPage(ctk.CTkFrame):
 
         est = ctk.CTkFrame(card, fg_color="transparent")
         est.grid(row=0, column=2, padx=4)
-        self._small(est, "−", lambda: self._bump(it, -1)).pack(side="left")
-        ctk.CTkLabel(est, text=f"{it['done_count']}/{it['est']}", width=40,
-                     font=(T.FONT_FAMILY_MONO, 13, "bold"),
-                     text_color=T.TEXT_SECONDARY).pack(side="left")
-        self._small(est, "+", lambda: self._bump(it, 1)).pack(side="left")
+        ctk.CTkLabel(est, text=f"{it['done_count']} /", font=(T.FONT_FAMILY_MONO, 13, "bold"),
+                     text_color=T.TEXT_SECONDARY).pack(side="left", padx=(0, 4))
+        self._est_menu(est, it["est"], height=28, width=60,
+                       command=lambda v: self._set_est(it, int(v))).pack(side="left")
 
         ctk.CTkButton(
             card, text="今日", width=48, height=28, corner_radius=8, font=(T.FONT_FAMILY_UI, 12),
@@ -212,10 +208,19 @@ class TodoPage(ctk.CTkFrame):
         ).grid(row=0, column=5, padx=(0, 10))
 
     @staticmethod
-    def _small(parent, text: str, command) -> ctk.CTkButton:
-        return ctk.CTkButton(parent, text=text, width=24, height=24, corner_radius=8,
-                             font=(T.FONT_FAMILY_UI, 14, "bold"), fg_color="transparent",
-                             text_color=T.TEXT_SECONDARY, hover_color=T.BG_GLASS_HOVER, command=command)
+    def _est_menu(parent, value: int, *, height: int, width: int, command=None) -> ctk.CTkOptionMenu:
+        """預估番茄數：從清單選 1～12（目前值超出時一併列出）。"""
+        values = [str(n) for n in range(1, 13)]
+        if str(value) not in values:
+            values.append(str(value))
+        return ctk.CTkOptionMenu(
+            parent, values=values, variable=ctk.StringVar(value=str(value)), command=command,
+            width=width, height=height, corner_radius=10, font=(T.FONT_FAMILY_MONO, 13, "bold"),
+            dropdown_font=(T.FONT_FAMILY_MONO, 13), fg_color=("#EFEAE5", "#2C2C38"),
+            button_color=("#E3DCD6", "#3A3A48"), button_hover_color=("#D8D0C9", "#464656"),
+            text_color=T.TEXT_PRIMARY, dropdown_fg_color=T.BG_GLASS_SOLID,
+            dropdown_text_color=T.TEXT_PRIMARY, dropdown_hover_color=T.BG_GLASS_HOVER,
+        )
 
     # ── 動作 ──
     def _changed(self) -> None:
@@ -232,8 +237,8 @@ class TodoPage(ctk.CTkFrame):
         it["today"] = not it["today"]
         self._changed()
 
-    def _bump(self, it: dict, d: int) -> None:
-        it["est"] = max(1, min(it["est"] + d, 20))
+    def _set_est(self, it: dict, est: int) -> None:
+        it["est"] = est
         self._changed()
 
     def _delete(self, it: dict) -> None:
