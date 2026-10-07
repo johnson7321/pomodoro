@@ -102,6 +102,7 @@ CSV 格式：`utf-8-sig`，欄位 `時間戳記,活動類型,持續時間`。
 9. **主頁全部可用鍵盤操作，快捷鍵集中在 `main_window._on_key`（綁在 root 的 `<Key>`）。**
    空白鍵 開始／暫停、R 重置、←/1 專注、→/2 休息、S 設定、T 統計、L 待辦、P 釘選、M 迷你模式；Esc 離開設定頁／迷你模式。
    快捷鍵綁在整個視窗，設定頁與待辦頁有輸入框，所以 `_in_setup`（任一子頁，`_sub_page` = setup / todo）時只處理 Esc，否則打字會誤觸計時。新增或更動快捷鍵請同步 `setup_page.SHORTCUTS`（說明只放設定頁，主頁不放提示文字）。
+   待辦頁子頁例外：Enter 會把游標放進新增輸入框（`TodoPage.focus_add`），輸入框空著時按 Enter 就能開始打字。
 10. **圖示按鈕的 customtkinter 陷阱。** `CTkButton` 帶圖示時，左右會各留「圓角半徑」寬的內距，圓角大就被撐寬，
    做不出正圓；而且 `configure(image=...)` 不會重畫，圖示標籤要等重畫才建立（第一次要 `require_redraw=True`）。
    所以主頁的播放／暫停與重置用 `RoundIconButton`：整顆圓用 Pillow 畫成圖片，圓角為 0、滑過時換圖；

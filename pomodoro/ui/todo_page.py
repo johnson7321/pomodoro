@@ -124,7 +124,7 @@ class TodoPage(ctk.CTkFrame):
         row.grid_columnconfigure(0, weight=1)
         self.add_entry = ctk.CTkEntry(
             row, height=38, corner_radius=12, border_width=0, font=(T.FONT_FAMILY_UI, 13),
-            fg_color=("#EFEAE5", "#2C2C38"), placeholder_text="新增待辦，按 Enter 加入",
+            fg_color=("#EFEAE5", "#2C2C38"), placeholder_text="按 Enter 開始輸入待辦",
         )
         self.add_entry.grid(row=0, column=0, sticky="ew")
         self.add_entry.bind("<Return>", lambda e: self._add())
@@ -254,6 +254,13 @@ class TodoPage(ctk.CTkFrame):
         self.refresh()
 
     # ── 供主視窗呼叫 ──
+    def focus_add(self) -> None:
+        """按 Enter 時，若目前不在任何輸入框，就把游標放進新增輸入框開始打字。"""
+        focus = self.focus_get()
+        if focus in (getattr(self.add_entry, "_entry", None), getattr(self.hours_entry, "_entry", None)):
+            return
+        self.add_entry.focus_set()
+
     def current_text(self) -> str:
         it = TD.find(self.items, self._settings.get("current_task"))
         return it["text"] if it and not it["done"] else ""

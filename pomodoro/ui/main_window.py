@@ -757,6 +757,8 @@ class PomodoroApp:
         if self._in_setup:
             if key == "escape":
                 (self.hide_todo if self._sub_page == "todo" else self.hide_setup)()
+            elif key in ("return", "kp_enter") and self._sub_page == "todo":
+                self.todo_page.focus_add()
             return
         if self._is_mini:
             if key == "escape":
