@@ -9,7 +9,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 from .. import theme as T
-from ..config import MAIN_WINDOW_SIZE, MINI_WINDOW_SIZE, SETUP_WINDOW_SIZE
+from ..config import MAIN_WINDOW_SIZE, MINI_WINDOW_SIZE, SETUP_WINDOW_SIZE, TODO_WINDOW_SIZE
 from ..core import alarm as AL
 from ..core import csv_logger as CL
 from ..core import hosts_blocker as HB
@@ -22,6 +22,7 @@ from . import icons as IC
 from .history_chart import open_history_chart
 from .mini_view import MiniView
 from .setup_page import SetupPage
+from .todo_page import TodoPage
 from .widgets import GhostButton, GlowRing, PillButton, RoundIconButton
 
 
@@ -56,7 +57,8 @@ class PomodoroApp:
         self._is_mini = False
         self._timer_id = None
 
-        self._in_setup = False
+        self._in_setup = False  # 在任一子頁（設定／待辦）時為 True
+        self._sub_page = "setup"  # 目前子頁：setup / todo
         self.site_tracker = SiteTracker()
         if SU.is_frozen():
             SU.set_enabled(self.settings["autostart"])
@@ -66,7 +68,9 @@ class PomodoroApp:
         self.root.grid_rowconfigure(0, weight=1)
         self._build_main_ui()
         self._build_setup_ui()
+        self._build_todo_ui()
         self._build_mini_ui()
+        self._update_task_label()
         self._apply_mode_ui("work")
 
         # 套用 Win11 mica（失敗會 silently 回 fallback 純色）
@@ -100,6 +104,11 @@ class PomodoroApp:
             command=self.toggle_always_on_top,
         )
         self.btn_pin.grid(row=0, column=2, sticky="e")
+        # 目前任務（沒有設定時是空字串，主頁維持乾淨）
+        self.task_label = ctk.CTkLabel(
+            top, text="", font=(T.FONT_FAMILY_UI, 12), text_color=T.TEXT_SECONDARY, anchor="w",
+        )
+        self.task_label.grid(row=0, column=0, columnspan=2, sticky="w")
 
         # ── 圓環 ──
         self.ring = GlowRing(self.main)
@@ -149,17 +158,22 @@ class PomodoroApp:
         # ── 功能入口：兩顆並排的次要按鈕 ──
         action_col = self.action_col = ctk.CTkFrame(self.main, fg_color="transparent")
         action_col.grid(row=4, column=0, sticky="ew", padx=30, pady=(12, 22))
-        action_col.grid_columnconfigure((0, 1), weight=1, uniform="act")
+        action_col.grid_columnconfigure((0, 1, 2), weight=1, uniform="act")
 
         GhostButton(
-            action_col, text="時間統計", icon="chart", icon_size=18,
+            action_col, text="統計", icon="chart", icon_size=18,
             command=self._open_stats,
-        ).grid(row=0, column=0, sticky="ew", padx=(0, 4))
+        ).grid(row=0, column=0, sticky="ew", padx=(0, 3))
+
+        GhostButton(
+            action_col, text="待辦", icon="check", icon_size=18,
+            command=self.show_todo,
+        ).grid(row=0, column=1, sticky="ew", padx=3)
 
         GhostButton(
             action_col, text="設定", icon="gear", icon_size=18,
             command=self.show_setup,
-        ).grid(row=0, column=1, sticky="ew", padx=(4, 0))
+        ).grid(row=0, column=2, sticky="ew", padx=(3, 0))
 
         self._build_prompt()
 
@@ -240,6 +254,42 @@ class PomodoroApp:
         self.work_entry = self.setup_page.work_entry
         self.break_entry = self.setup_page.break_entry
 
+    def _build_todo_ui(self) -> None:
+        self.todo_page = TodoPage(
+            self.root,
+            settings=self.settings,
+            get_durations=lambda: (self.engine.work_seconds // 60, self.engine.break_seconds // 60),
+            on_save_settings=lambda: ST.save(self.settings),
+            on_back=self.hide_todo,
+            on_current_changed=self._update_task_label,
+        )
+        self.todo_page.grid(row=0, column=0, sticky="nsew")
+        self.todo_page.grid_remove()
+
+    def _update_task_label(self) -> None:
+        text = self.todo_page.current_text()
+        self.task_label.configure(text=f"目前：{text[:18]}…" if len(text) > 18 else (f"目前：{text}" if text else ""))
+
+    def _sub_widget(self):
+        return self.todo_page if self._sub_page == "todo" else self.setup_page
+
+    def _sub_size(self) -> tuple[int, int]:
+        return TODO_WINDOW_SIZE if self._sub_page == "todo" else SETUP_WINDOW_SIZE
+
+    def show_todo(self) -> None:
+        self._in_setup, self._sub_page = True, "todo"
+        self.main.grid_remove()
+        self.todo_page.refresh()
+        self._set_window_size(TODO_WINDOW_SIZE)
+        self.todo_page.grid()
+
+    def hide_todo(self) -> None:
+        self._in_setup = False
+        self.todo_page.grid_remove()
+        self._update_task_label()
+        self._set_window_size(MAIN_WINDOW_SIZE)
+        self.main.grid()
+
     def _set_window_size(self, size: tuple[int, int]) -> None:
         """換頁時調整視窗高度；minsize 要一起改，否則縮不下去。"""
         w, h = size
@@ -252,7 +302,7 @@ class PomodoroApp:
         self.root.after(300, lambda: self.root.bind("<Unmap>", self._on_unmap))
 
     def show_setup(self, message: str | None = None) -> None:
-        self._in_setup = True
+        self._in_setup, self._sub_page = True, "setup"
         self.setup_page.refresh_admin()
         self.main.grid_remove()
         self._set_window_size(SETUP_WINDOW_SIZE)
@@ -375,6 +425,7 @@ class PomodoroApp:
         self.root.attributes("-topmost", True)  # 迷你視窗一律浮在最上層才有用
         self.main.grid_remove()
         self.setup_page.grid_remove()
+        self.todo_page.grid_remove()
         self.mini.grid()
         self.root.focus_force()  # 無邊框視窗不會自動取得焦點，快捷鍵才收得到
         # Win11：圓角、隱藏細邊框。剛調整大小時 DWM 可能忽略，稍後再套一次
@@ -401,12 +452,12 @@ class PomodoroApp:
         x, y = self._main_pos
         self.mini.grid_remove()
         if self._in_setup:
-            self.setup_page.grid()
+            self._sub_widget().grid()
         else:
             self.main.grid()
         # 還原標題列；改回一般視窗後要重新顯示，框架才會出現
         self.root.overrideredirect(False)
-        w, h = SETUP_WINDOW_SIZE if self._in_setup else MAIN_WINDOW_SIZE
+        w, h = self._sub_size() if self._in_setup else MAIN_WINDOW_SIZE
         self.root.resizable(True, True)
         self.root.minsize(w, h)
         self.root.geometry(f"{w}x{h}+{x}+{y}")
@@ -597,6 +648,8 @@ class PomodoroApp:
     def _on_engine_complete(self, mode) -> None:
         self._play_alarm()
         self._save_current()
+        if mode == "work":
+            self.todo_page.record_pomodoro()  # 記到「目前任務」上
 
         # 先進入超時累加並繼續 tick，再顯示頁面內的選擇區；
         # 選擇之前的時間都會累加進超時，選「繼續」後沿用同一段累加。
@@ -703,7 +756,7 @@ class PomodoroApp:
         key = e.keysym.lower()
         if self._in_setup:
             if key == "escape":
-                self.hide_setup()
+                (self.hide_todo if self._sub_page == "todo" else self.hide_setup)()
             return
         if self._is_mini:
             if key == "escape":
@@ -729,6 +782,7 @@ class PomodoroApp:
             "2": lambda: self._select_mode("break"),
             "s": self.show_setup,
             "t": self._open_stats,
+            "l": self.show_todo,
             "p": self.toggle_always_on_top,
             "m": self._enter_mini,
         }

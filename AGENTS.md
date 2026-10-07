@@ -20,6 +20,8 @@ v2.0 已把原本的單檔 `pomodoro_window.py` 拆成 `pomodoro/` 套件，分�
   - `site_tracker.py` 記錄瀏覽器在 Instagram／Facebook／YouTube／Bilibili 的使用時間：每 5 秒看前景視窗，
     是瀏覽器（exe 白名單）且標題含網站關鍵字才累加；只存「邏輯日→網站→秒數」到 `site_usage.json`（不進 git），不存標題與網址。
     只算分頁在前景的時間；`main_window._track_tick` 驅動，設定頁可關（`settings["track_sites"]`）。統計視窗從檔案讀，開啟前要 `flush()`（`_open_stats`）。
+  - `todos.py` 待辦清單（`todos.json`，不進 git）與今日計畫換算：項目 `{id,text,est,done_count,done,today}`；
+    `plan_summary()` 把排進今天的剩餘番茄換成專注分鐘（比對 `settings["daily_hours"]`）與含休息的預計完成時間
   - `startup.py` 開機啟動：寫 `HKCU\...\Run` 的 `PomodoroTimer`，只在打包後的 exe 生效
 - `pomodoro/ui/` — customtkinter 畫面
   - `main_window.py` 主視窗，最大的檔，把 core 三者串起來
@@ -28,6 +30,8 @@ v2.0 已把原本的單檔 `pomodoro_window.py` 拆成 `pomodoro/` 套件，分�
   - `icons.py` 用 Pillow 畫的單色圖示組（`icon(name, size, color)`）、App 標誌、`apply_window_icon()`
   - `setup_page.py` 設定頁（整頁，與主頁在同一視窗內切換，左右兩欄）：時長、音量、快捷鍵說明（`SHORTCUTS`）、
     開機啟動、管理員狀態、封鎖網站清單。**主頁只留計時操作，所有設定與說明文字都放這裡。**
+  - `todo_page.py` 待辦頁（整頁，與設定頁同樣在視窗內切換）：今日計畫、新增、清單（預估番茄±、「今日」、設為目前任務、刪除）。
+    「目前任務」存 `settings["current_task"]`，專注段落完成時 `_on_engine_complete` 呼叫 `record_pomodoro()` 記一個番茄；主頁左上只在有目前任務時顯示「目前：xxx」
   - `mini_view.py` 迷你模式畫面（Canvas：模式色漸層底、狀態小字、大時間、底部進度條）
   - `history_chart.py` 時間統計子視窗（摘要卡 + 每小時堆疊長條圖；matplotlib 圖的底色要取卡片色 `BG_GLASS_SOLID`，否則會看到色塊）
 
@@ -96,8 +100,8 @@ CSV 格式：`utf-8-sig`，欄位 `時間戳記,活動類型,持續時間`。
 8. **視窗圖示要延後設定。** customtkinter 會在視窗建立約 200ms 後蓋上自己的預設圖示，
    所以 `apply_window_icon()` 用 `after(350)`；直接在建構時 `iconbitmap` 會被蓋回藍色預設圖示。
 9. **主頁全部可用鍵盤操作，快捷鍵集中在 `main_window._on_key`（綁在 root 的 `<Key>`）。**
-   空白鍵 開始／暫停、R 重置、←/1 專注、→/2 休息、S 設定、T 統計、P 釘選、M 迷你模式；Esc 離開設定頁／迷你模式。
-   快捷鍵綁在整個視窗，設定頁有輸入框，所以 `_in_setup` 時只處理 Esc，否則打字會誤觸計時。新增或更動快捷鍵請同步 `setup_page.SHORTCUTS`（說明只放設定頁，主頁不放提示文字）。
+   空白鍵 開始／暫停、R 重置、←/1 專注、→/2 休息、S 設定、T 統計、L 待辦、P 釘選、M 迷你模式；Esc 離開設定頁／迷你模式。
+   快捷鍵綁在整個視窗，設定頁與待辦頁有輸入框，所以 `_in_setup`（任一子頁，`_sub_page` = setup / todo）時只處理 Esc，否則打字會誤觸計時。新增或更動快捷鍵請同步 `setup_page.SHORTCUTS`（說明只放設定頁，主頁不放提示文字）。
 10. **圖示按鈕的 customtkinter 陷阱。** `CTkButton` 帶圖示時，左右會各留「圓角半徑」寬的內距，圓角大就被撐寬，
    做不出正圓；而且 `configure(image=...)` 不會重畫，圖示標籤要等重畫才建立（第一次要 `require_redraw=True`）。
    所以主頁的播放／暫停與重置用 `RoundIconButton`：整顆圓用 Pillow 畫成圖片，圓角為 0、滑過時換圖；
