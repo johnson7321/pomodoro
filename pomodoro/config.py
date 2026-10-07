@@ -12,6 +12,7 @@ BLOCKED_SITES_FILE = "blocked_sites.json"
 
 # 使用者偏好
 SETTINGS_FILE = "settings.json"
+SITE_USAGE_FILE = "site_usage.json"  # 瀏覽器網站使用時間（個人資料，不進 git）
 DEFAULT_VOLUME = 70
 
 # 預設時長（分鐘）
@@ -22,7 +23,7 @@ DEFAULT_BREAK_MINUTES = 5
 MAIN_WINDOW_SIZE = (440, 568)
 SETUP_WINDOW_SIZE = (900, 656)
 MINI_WINDOW_SIZE = (220, 92)
-HISTORY_CHART_SIZE = (940, 640)
+HISTORY_CHART_SIZE = (940, 740)
 
 # 邏輯日重置時刻（凌晨幾點換日）
 LOGICAL_DAY_RESET_HOUR = 4

@@ -17,6 +17,9 @@ v2.0 已把原本的單檔 `pomodoro_window.py` 拆成 `pomodoro/` 套件，分�
   - `win11_effects.py` mica / 深色標題列，失敗靜默 fallback
   - `alarm.py` 自行合成 WAV 播放鬧鐘（為了能調音量，不用 winsound 系統音效）
   - `settings.py` 讀寫 `settings.json`（音量、開機啟動）
+  - `site_tracker.py` 記錄瀏覽器在 Instagram／Facebook／YouTube／Bilibili 的使用時間：每 5 秒看前景視窗，
+    是瀏覽器（exe 白名單）且標題含網站關鍵字才累加；只存「邏輯日→網站→秒數」到 `site_usage.json`（不進 git），不存標題與網址。
+    只算分頁在前景的時間；`main_window._track_tick` 驅動，設定頁可關（`settings["track_sites"]`）。統計視窗從檔案讀，開啟前要 `flush()`（`_open_stats`）。
   - `startup.py` 開機啟動：寫 `HKCU\...\Run` 的 `PomodoroTimer`，只在打包後的 exe 生效
 - `pomodoro/ui/` — customtkinter 畫面
   - `main_window.py` 主視窗，最大的檔，把 core 三者串起來

@@ -14,6 +14,7 @@ from ..core import alarm as AL
 from ..core import csv_logger as CL
 from ..core import hosts_blocker as HB
 from ..core import settings as ST
+from ..core.site_tracker import SiteTracker
 from ..core import startup as SU
 from ..core import win11_effects as W11
 from ..core.timer_engine import TimerEngine
@@ -56,6 +57,7 @@ class PomodoroApp:
         self._timer_id = None
 
         self._in_setup = False
+        self.site_tracker = SiteTracker()
         if SU.is_frozen():
             SU.set_enabled(self.settings["autostart"])
 
@@ -73,6 +75,7 @@ class PomodoroApp:
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         self.root.bind("<Unmap>", self._on_unmap)
         self._bind_shortcuts()
+        self._track_tick()
 
     # ======================================================================
     # 主視窗建構
@@ -150,7 +153,7 @@ class PomodoroApp:
 
         GhostButton(
             action_col, text="時間統計", icon="chart", icon_size=18,
-            command=lambda: open_history_chart(self.root),
+            command=self._open_stats,
         ).grid(row=0, column=0, sticky="ew", padx=(0, 4))
 
         GhostButton(
@@ -227,6 +230,7 @@ class PomodoroApp:
             on_back=self.hide_setup,
             on_volume_commit=self._commit_volume,
             on_autostart=self._set_autostart,
+            on_track_sites=self._set_track_sites,
             on_sites_changed=self._sites_changed,
             on_restart_admin=self._restart_admin,
         )
@@ -278,6 +282,20 @@ class PomodoroApp:
         self.settings["autostart"] = enabled
         ST.save(self.settings)
         return True
+
+    def _set_track_sites(self, enabled: bool) -> None:
+        self.settings["track_sites"] = enabled
+        ST.save(self.settings)
+
+    def _track_tick(self) -> None:
+        """每 5 秒看一次前景視窗，把瀏覽器在特定網站的時間記下來（與計時器無關，一直在跑）。"""
+        if self.settings.get("track_sites", True):
+            self.site_tracker.poll(5)
+        self.root.after(5000, self._track_tick)
+
+    def _open_stats(self) -> None:
+        self.site_tracker.flush()  # 統計視窗從檔案讀，先把還沒存的時間寫進去
+        open_history_chart(self.root)
 
     def _sites_changed(self, sites: list[str]) -> None:
         HB.save_sites(sites)
@@ -710,7 +728,7 @@ class PomodoroApp:
             "right": lambda: self._select_mode("break"),
             "2": lambda: self._select_mode("break"),
             "s": self.show_setup,
-            "t": lambda: open_history_chart(self.root),
+            "t": self._open_stats,
             "p": self.toggle_always_on_top,
             "m": self._enter_mini,
         }
@@ -735,6 +753,7 @@ class PomodoroApp:
     # 收尾
     # ======================================================================
     def on_close(self) -> None:
+        self.site_tracker.flush()
         if self.engine.elapsed > 0:
             self._save_current()
         if self._sites_active:

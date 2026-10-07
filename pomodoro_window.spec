@@ -35,6 +35,7 @@ hiddenimports += [
     'pomodoro.core.alarm',
     'pomodoro.core.settings',
     'pomodoro.core.startup',
+    'pomodoro.core.site_tracker',
     'pomodoro.ui',
     'pomodoro.ui.widgets',
     'pomodoro.ui.icons',

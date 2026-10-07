@@ -38,6 +38,7 @@ class SetupPage(ctk.CTkFrame):
         on_back: Callable[[], None],
         on_volume_commit: Callable[[int], None],
         on_autostart: Callable[[bool], bool],
+        on_track_sites: Callable[[bool], None],
         on_sites_changed: Callable[[list[str]], None],
         on_restart_admin: Callable[[], None],
     ) -> None:
@@ -47,6 +48,7 @@ class SetupPage(ctk.CTkFrame):
         self._sites = sites
         self._on_volume_commit = on_volume_commit
         self._on_autostart = on_autostart
+        self._on_track_sites = on_track_sites
         self._on_sites_changed = on_sites_changed
         self._on_restart_admin = on_restart_admin
         self._msg_job = None
@@ -80,7 +82,8 @@ class SetupPage(ctk.CTkFrame):
         self._build_timer(self._section(left, "計時"), settings)
         self._build_reminder(self._section(left, "提醒"), settings)
         self._build_shortcuts(self._section(left, "快捷鍵", expand=True))
-        self._build_system(self._section(right, "系統"), autostart_available, autostart_on)
+        self._build_system(self._section(right, "系統"), autostart_available, autostart_on,
+                           settings.get("track_sites", True))
         self._build_blocked(self._section(right, "封鎖網站", expand=True))
 
         # ── 提示訊息（錯誤與回饋都在這裡，不跳視窗） ──
@@ -166,7 +169,8 @@ class SetupPage(ctk.CTkFrame):
                 cell, text=desc, font=(T.FONT_FAMILY_UI, 12), text_color=T.TEXT_SECONDARY,
             ).pack(side="left", padx=(8, 0))
 
-    def _build_system(self, card: GlassCard, autostart_available: bool, autostart_on: bool) -> None:
+    def _build_system(self, card: GlassCard, autostart_available: bool, autostart_on: bool,
+                      track_sites: bool) -> None:
         self.autostart_switch = ctk.CTkSwitch(
             card, text="開機自動啟動", font=(T.FONT_FAMILY_UI, 13),
             text_color=T.TEXT_PRIMARY, command=self._toggle_autostart,
@@ -177,6 +181,14 @@ class SetupPage(ctk.CTkFrame):
             self.autostart_switch.configure(text="開機自動啟動（僅打包版可用）", state="disabled")
         elif autostart_on:
             self.autostart_switch.select()
+        self.track_switch = ctk.CTkSwitch(
+            card, text="記錄瀏覽器使用時間（IG／FB／YouTube／Bilibili）", font=(T.FONT_FAMILY_UI, 13),
+            text_color=T.TEXT_PRIMARY, command=lambda: self._on_track_sites(bool(self.track_switch.get())),
+            progress_color=T.MODE_CFG["work"]["color"],
+        )
+        self.track_switch.pack(anchor="w", padx=16, pady=(12, 0))
+        if track_sites:
+            self.track_switch.select()
         ctk.CTkFrame(card, height=1, fg_color=T.DIVIDER).pack(fill="x", padx=16, pady=(12, 10))
         self._admin_box = ctk.CTkFrame(card, fg_color="transparent")
         self._admin_box.pack(fill="x", padx=16, pady=(0, 14))

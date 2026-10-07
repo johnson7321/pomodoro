@@ -16,6 +16,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 from .. import theme as T
 from ..config import HISTORY_CHART_SIZE, LOGICAL_DAY_RESET_HOUR
+from ..core import site_tracker as ST
 from ..core import csv_logger as CL
 from . import icons as IC
 from .widgets import GlassCard
@@ -120,8 +121,8 @@ def open_history_chart(parent) -> None:
     peak_idx = int(np.argmax(work_arr)) if work_arr.max() > 0 else -1
     peak_clock = (peak_idx + LOGICAL_DAY_RESET_HOUR) % 24
 
-    def kpi(col: int, title: str, value: str, sub: str, color: str) -> None:
-        card = GlassCard(kpi_row)
+    def kpi(col: int, title: str, value: str, sub: str, color: str, parent=None) -> None:
+        card = GlassCard(parent or kpi_row)
         card.grid(row=0, column=col, sticky="nsew", padx=5)
         ctk.CTkLabel(
             card, text=f" {title}", compound="left", image=IC.icon("dot", 10, color),
@@ -152,6 +153,17 @@ def open_history_chart(parent) -> None:
             T.MODE_CFG["overtime_break"]["color"])
     else:
         kpi(3, "最專注時段", "—", "這個區間還沒有專注紀錄", T.MODE_CFG["overtime_break"]["color"])
+
+    # ── 瀏覽器網站使用時間（前景視窗標題比對；顯示當天的邏輯日）──
+    usage = ST.usage_for_day(today)
+    site_row = ctk.CTkFrame(win, fg_color="transparent")
+    site_row.pack(fill="x", padx=19, pady=(0, 10))
+    site_row.grid_columnconfigure((0, 1, 2, 3), weight=1, uniform="site")
+    site_colors = {"Instagram": "#E1306C", "Facebook": "#1877F2", "YouTube": "#E53935", "Bilibili": "#00A1D6"}
+    for i, site in enumerate(ST.SITES):
+        sec = usage[site]
+        kpi(i, site, CL.format_duration_human(sec) if sec else "—",
+            "瀏覽器前景時間" if sec else "沒有使用紀錄", site_colors[site], parent=site_row)
 
     # ── 圖表 ──
     chart_card = GlassCard(win)

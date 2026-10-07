@@ -33,3 +33,4 @@ dist/
 
 # --- 專注紀錄（個人資料）---
 *.csv
+site_usage.json
