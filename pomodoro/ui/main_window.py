@@ -200,23 +200,19 @@ class PomodoroApp:
     # 時間到提示（取代彈窗）：蓋在控制區的位置，底色透明，圓環與倒數照常可見
     # ======================================================================
     def _build_prompt(self) -> None:
-        self._prompt_kind: str | None = None  # "work" / "break"：哪一種時間到；None 表示沒有提示
+        """時間到不需要選擇：自動進入超時累加。這裡只在模式選擇列的位置放一個「開始休息／專注」捷徑，
+        其餘按鈕（暫停、重置…）照常可用，不理它就是繼續超時。"""
+        self._prompt_kind: str | None = None  # "work" / "break"：剛結束的模式；None 表示沒有捷徑
         self.prompt = ctk.CTkFrame(self.main, fg_color="transparent")
         self.prompt.grid_columnconfigure(0, weight=1)
         self.prompt_title = ctk.CTkLabel(
-            self.prompt, text="", font=(T.FONT_FAMILY_UI, 18, "bold"), text_color=T.TEXT_PRIMARY)
-        self.prompt_title.grid(row=0, column=0, pady=(6, 0))
-        self.prompt_hint = ctk.CTkLabel(
-            self.prompt, text="", font=(T.FONT_FAMILY_UI, 12), text_color=T.TEXT_SECONDARY)
-        self.prompt_hint.grid(row=1, column=0, pady=(2, 14))
+            self.prompt, text="", font=(T.FONT_FAMILY_UI, 14, "bold"), text_color=T.TEXT_PRIMARY, anchor="w")
+        self.prompt_title.grid(row=0, column=0, sticky="w")
         self.prompt_switch = PillButton(
-            self.prompt, text="", color=T.MODE_CFG["work"]["color"],
+            self.prompt, text="", color=T.MODE_CFG["work"]["color"], width=170, height=42,
             hover=T.MODE_CFG["work"]["hover"], command=self._prompt_switch)
-        self.prompt_switch.grid(row=2, column=0, sticky="ew", padx=30)
-        self.prompt_continue = GhostButton(
-            self.prompt, text="", height=42, command=self._prompt_continue)
-        self.prompt_continue.grid(row=3, column=0, sticky="ew", padx=30, pady=(10, 0))
-        self.prompt.grid(row=2, column=0, rowspan=3, sticky="new")
+        self.prompt_switch.grid(row=0, column=1, sticky="e")
+        self.prompt.grid(row=2, column=0, padx=30, pady=(0, 6), sticky="ew")
         self.prompt.grid_remove()
 
     def _show_prompt(self, kind: str) -> None:
@@ -224,13 +220,10 @@ class PomodoroApp:
         self._prompt_kind = kind
         nxt = "break" if kind == "work" else "work"
         cfg, ncfg = T.MODE_CFG[kind], T.MODE_CFG[nxt]
-        self.prompt_title.configure(text=f"{cfg['name']}結束")
-        self.prompt_hint.configure(text="時間持續累加中")
+        self.prompt_title.configure(text=f"{cfg['name']}結束・超時中")
         self.prompt_switch.configure(
             text=f"開始{ncfg['name']}（Enter）", fg_color=ncfg["color"], hover_color=ncfg["hover"])
-        self.prompt_continue.configure(text=f"繼續{cfg['name']}・記錄超時（Esc）")
-        for w in (self.mode_selector, self.btn_row, self.action_col):
-            w.grid_remove()
+        self.mode_selector.grid_remove()
         self.prompt.grid()
 
     def _hide_prompt(self) -> None:
@@ -239,16 +232,11 @@ class PomodoroApp:
         self._prompt_kind = None
         self.prompt.grid_remove()
         self.mode_selector.grid()
-        self.btn_row.grid()
-        self.action_col.grid()
 
     def _prompt_switch(self) -> None:
         kind = self._prompt_kind
         if kind:
             self._switch_mode("break" if kind == "work" else "work", auto_start=True)
-
-    def _prompt_continue(self) -> None:
-        self._hide_prompt()  # 留在超時狀態續跑，不中斷
 
     # ======================================================================
     # 設定頁
@@ -854,9 +842,6 @@ class PomodoroApp:
         if self._prompt_kind:
             if key in ("return", "kp_enter"):
                 self._prompt_switch()
-                return
-            if key == "escape":
-                self._prompt_continue()
                 return
         if self.water_reminder.pending and key in ("return", "kp_enter"):
             self._drink()  # 該喝水時 Enter 直接記一杯
