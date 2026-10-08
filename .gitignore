@@ -35,3 +35,4 @@ dist/
 *.csv
 site_usage.json
 todos.json
+water_log.json

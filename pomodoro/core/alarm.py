@@ -9,14 +9,15 @@ import wave
 
 _RATE = 22050
 _PATTERN = ((880, 180), (1175, 180), (0, 80), (880, 180), (1175, 260))  # (Hz, 毫秒)
+_CHIME = ((660, 150), (880, 150), (1320, 260))  # 喝水提醒：比鬧鐘柔和短促
 _FADE = int(_RATE * 0.008)  # 淡入淡出，避免爆音
 
 
-def build_wav(volume: int) -> bytes:
+def build_wav(volume: int, pattern=_PATTERN) -> bytes:
     """volume 0~100；以平方曲線換算振幅，低音量區段調整更細。"""
     amp = 32767 * 0.9 * (max(0, min(100, volume)) / 100) ** 2
     samples: list[int] = []
-    for freq, ms in _PATTERN:
+    for freq, ms in pattern:
         n = int(_RATE * ms / 1000)
         for i in range(n):
             if freq == 0:
@@ -33,7 +34,7 @@ def build_wav(volume: int) -> bytes:
     return buf.getvalue()
 
 
-def play(volume: int) -> None:
+def play(volume: int, pattern=_PATTERN) -> None:
     """背景播放，不阻塞 UI；音量為 0 時靜音。"""
     if volume <= 0:
         return
@@ -41,8 +42,13 @@ def play(volume: int) -> None:
     def _run() -> None:
         try:
             import winsound
-            winsound.PlaySound(build_wav(volume), winsound.SND_MEMORY)
+            winsound.PlaySound(build_wav(volume, pattern), winsound.SND_MEMORY)
         except Exception:
             pass
 
     threading.Thread(target=_run, daemon=True).start()
+
+
+def play_chime(volume: int) -> None:
+    """喝水提醒音。"""
+    play(volume, _CHIME)

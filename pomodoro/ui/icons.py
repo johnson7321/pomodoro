@@ -135,6 +135,11 @@ def _draw_gear(d, u, w, c):
     d.ellipse((u(.39), u(.39), u(.61), u(.61)), fill=hole)
 
 
+def _draw_drop(d, u, w, c):
+    d.polygon([(u(.5), u(.10)), (u(.27), u(.55)), (u(.73), u(.55))], fill=c)
+    d.ellipse((u(.24), u(.38), u(.76), u(.90)), fill=c)
+
+
 def _draw_back(d, u, w, c):
     pts = [(u(.62), u(.20)), (u(.34), u(.50)), (u(.62), u(.80))]
     d.line(pts, fill=c, width=w, joint="curve")
@@ -156,7 +161,7 @@ _DRAWERS = {
     "play": _draw_play, "pause": _draw_pause, "reset": _draw_reset, "chart": _draw_chart,
     "block": _draw_block, "bell": _draw_bell, "pin": _draw_pin, "moon": _draw_moon,
     "dot": _draw_dot, "check": _draw_check, "warn": _draw_warn, "shield": _draw_shield,
-    "close": _draw_close, "gear": _draw_gear, "back": _draw_back,
+    "close": _draw_close, "gear": _draw_gear, "back": _draw_back, "drop": _draw_drop,
 }
 
 

@@ -4,17 +4,19 @@
 """
 from __future__ import annotations
 
+from datetime import datetime
 from tkinter import messagebox
 
 import customtkinter as ctk
 
 from .. import theme as T
-from ..config import MAIN_WINDOW_SIZE, MINI_WINDOW_SIZE, SETUP_WINDOW_SIZE, TODO_WINDOW_SIZE
+from ..config import MAIN_WINDOW_SIZE, MINI_WINDOW_SIZE, SETUP_WINDOW_SIZE, TODO_WINDOW_SIZE, WATER_WINDOW_SIZE
 from ..core import alarm as AL
 from ..core import csv_logger as CL
 from ..core import hosts_blocker as HB
 from ..core import settings as ST
 from ..core.site_tracker import SiteTracker
+from ..core import water as WA
 from ..core import startup as SU
 from ..core import win11_effects as W11
 from ..core.timer_engine import TimerEngine
@@ -23,6 +25,7 @@ from .history_chart import open_history_chart
 from .mini_view import MiniView
 from .setup_page import SetupPage
 from .todo_page import TodoPage
+from .water_page import WATER_COLOR, WATER_HOVER, WaterPage
 from .widgets import GhostButton, GlowRing, PillButton, RoundIconButton
 
 
@@ -60,6 +63,8 @@ class PomodoroApp:
         self._in_setup = False  # 在任一子頁（設定／待辦）時為 True
         self._sub_page = "setup"  # 目前子頁：setup / todo
         self.site_tracker = SiteTracker()
+        self.water_log = WA.WaterLog()
+        self.water_reminder = WA.Reminder()
         if SU.is_frozen():
             SU.set_enabled(self.settings["autostart"])
 
@@ -69,6 +74,7 @@ class PomodoroApp:
         self._build_main_ui()
         self._build_setup_ui()
         self._build_todo_ui()
+        self._build_water_ui()
         self._build_mini_ui()
         self._update_task_label()
         self._apply_mode_ui("work")
@@ -80,6 +86,7 @@ class PomodoroApp:
         self.root.bind("<Unmap>", self._on_unmap)
         self._bind_shortcuts()
         self._track_tick()
+        self._water_tick()
 
     # ======================================================================
     # 主視窗建構
@@ -103,7 +110,19 @@ class PomodoroApp:
             hover_color=T.BG_GLASS_HOVER, corner_radius=10,
             command=self.toggle_always_on_top,
         )
-        self.btn_pin.grid(row=0, column=2, sticky="e")
+        self.btn_pin.grid(row=0, column=3, sticky="e", padx=(6, 0))
+        self.btn_water = ctk.CTkButton(
+            top, text="", width=36, height=32, image=IC.icon("drop", 16, T.TEXT_SECONDARY),
+            fg_color="transparent", border_width=1, border_color=T.BORDER_GLASS,
+            hover_color=T.BG_GLASS_HOVER, corner_radius=10, command=self.show_water,
+        )
+        self.btn_water.grid(row=0, column=2, sticky="e")
+        # 該喝水時取代「目前任務」顯示；按一下就記一杯
+        self.water_pill = ctk.CTkButton(
+            top, text="", height=32, corner_radius=16, font=(T.FONT_FAMILY_UI, 12, "bold"),
+            image=IC.icon("drop", 14, "#FFFFFF"), fg_color=WATER_COLOR, hover_color=WATER_HOVER,
+            text_color="white", command=self._drink,
+        )
         # 目前任務（沒有設定時是空字串，主頁維持乾淨）
         self.task_label = ctk.CTkLabel(
             top, text="", font=(T.FONT_FAMILY_UI, 12), text_color=T.TEXT_SECONDARY, anchor="w",
@@ -270,11 +289,74 @@ class PomodoroApp:
         text = self.todo_page.current_text()
         self.task_label.configure(text=f"目前：{text[:18]}…" if len(text) > 18 else (f"目前：{text}" if text else ""))
 
+    def _build_water_ui(self) -> None:
+        self.water_page = WaterPage(
+            self.root,
+            settings=self.settings,
+            log=self.water_log,
+            reminder=self.water_reminder,
+            on_back=self.hide_water,
+            on_drink=self._drink,
+            on_undo=self._undo_drink,
+            on_save_settings=lambda: ST.save(self.settings),
+        )
+        self.water_page.grid(row=0, column=0, sticky="nsew")
+        self.water_page.grid_remove()
+
     def _sub_widget(self):
-        return self.todo_page if self._sub_page == "todo" else self.setup_page
+        return {"todo": self.todo_page, "water": self.water_page}.get(self._sub_page, self.setup_page)
 
     def _sub_size(self) -> tuple[int, int]:
-        return TODO_WINDOW_SIZE if self._sub_page == "todo" else SETUP_WINDOW_SIZE
+        return {"todo": TODO_WINDOW_SIZE, "water": WATER_WINDOW_SIZE}.get(self._sub_page, SETUP_WINDOW_SIZE)
+
+    def show_water(self) -> None:
+        self._in_setup, self._sub_page = True, "water"
+        self.main.grid_remove()
+        self.water_page.refresh()
+        self._set_window_size(WATER_WINDOW_SIZE)
+        self.water_page.grid()
+
+    def hide_water(self) -> None:
+        self._in_setup = False
+        self.water_page.grid_remove()
+        self._set_window_size(MAIN_WINDOW_SIZE)
+        self.main.grid()
+
+    # ── 喝水提醒 ──
+    def _water_tick(self) -> None:
+        """每 30 秒檢查一次是否該提醒喝水；提醒只響聲音並在主頁頂部／迷你視窗出現提示，不彈窗。"""
+        s = self.settings
+        start, end = WA.parse_hhmm(s["water_start"]), WA.parse_hhmm(s["water_end"])
+        plan = WA.make_plan(s["water_weight"], s["water_glass"], start, end)
+        was_pending = self.water_reminder.pending
+        if self.water_reminder.check(
+                datetime.now(), enabled=s["water_enabled"], interval_min=plan["interval"],
+                start_min=start, end_min=end, goal_met=self.water_log.today_total() >= plan["target"]):
+            AL.play_chime(s["volume"])
+        if self.water_reminder.pending != was_pending:
+            self._update_water_pill()
+        self.root.after(30000, self._water_tick)
+
+    def _update_water_pill(self) -> None:
+        if self.water_reminder.pending:
+            self.water_pill.configure(text=f"該喝水了 · 記一杯 {self.settings['water_glass']} 毫升")
+            self.task_label.grid_remove()
+            self.water_pill.grid(row=0, column=0, columnspan=2, sticky="w")
+        else:
+            self.water_pill.grid_remove()
+            self.task_label.grid()
+        self._sync_mini()
+
+    def _drink(self) -> None:
+        self.water_log.add(self.settings["water_glass"])
+        self.water_reminder.drink()
+        self._update_water_pill()
+        if self._in_setup and self._sub_page == "water":
+            self.water_page.refresh()
+
+    def _undo_drink(self) -> None:
+        if self.water_log.undo():
+            self.water_page.refresh()
 
     def show_todo(self) -> None:
         self._in_setup, self._sub_page = True, "todo"
@@ -381,7 +463,7 @@ class PomodoroApp:
         if not hasattr(self, "mini"):
             return
         cfg = T.MODE_CFG[self._mode_key()]
-        self.mini.set_label(self._state_text() or cfg["name"])
+        self.mini.set_label("該喝水了" if self.water_reminder.pending else (self._state_text() or cfg["name"]))
         self.mini.set_progress(self.engine.progress())
         if self._is_mini:
             self._paint_mini(cfg["color"])
@@ -426,6 +508,7 @@ class PomodoroApp:
         self.main.grid_remove()
         self.setup_page.grid_remove()
         self.todo_page.grid_remove()
+        self.water_page.grid_remove()
         self.mini.grid()
         self.root.focus_force()  # 無邊框視窗不會自動取得焦點，快捷鍵才收得到
         # Win11：圓角、隱藏細邊框。剛調整大小時 DWM 可能忽略，稍後再套一次
@@ -756,7 +839,7 @@ class PomodoroApp:
         key = e.keysym.lower()
         if self._in_setup:
             if key == "escape":
-                (self.hide_todo if self._sub_page == "todo" else self.hide_setup)()
+                {"todo": self.hide_todo, "water": self.hide_water}.get(self._sub_page, self.hide_setup)()
             elif key in ("return", "kp_enter") and self._sub_page == "todo":
                 self.todo_page.focus_add()
             return
@@ -775,6 +858,9 @@ class PomodoroApp:
             if key == "escape":
                 self._prompt_continue()
                 return
+        if self.water_reminder.pending and key in ("return", "kp_enter"):
+            self._drink()  # 該喝水時 Enter 直接記一杯
+            return
         actions = {
             "space": self._toggle_run,
             "r": self.reset_timer,
@@ -785,6 +871,7 @@ class PomodoroApp:
             "s": self.show_setup,
             "t": self._open_stats,
             "l": self.show_todo,
+            "w": self.show_water,
             "p": self.toggle_always_on_top,
             "m": self._enter_mini,
         }

@@ -13,6 +13,7 @@ BLOCKED_SITES_FILE = "blocked_sites.json"
 # 使用者偏好
 SETTINGS_FILE = "settings.json"
 TODOS_FILE = "todos.json"  # 待辦清單（個人資料，不進 git）
+WATER_LOG_FILE = "water_log.json"  # 飲水紀錄（個人資料，不進 git）
 SITE_USAGE_FILE = "site_usage.json"  # 瀏覽器網站使用時間（個人資料，不進 git）
 DEFAULT_VOLUME = 70
 
@@ -24,6 +25,7 @@ DEFAULT_BREAK_MINUTES = 5
 MAIN_WINDOW_SIZE = (440, 568)
 SETUP_WINDOW_SIZE = (900, 656)
 TODO_WINDOW_SIZE = (580, 700)
+WATER_WINDOW_SIZE = (580, 800)
 MINI_WINDOW_SIZE = (220, 92)
 HISTORY_CHART_SIZE = (940, 740)
 

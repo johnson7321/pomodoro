@@ -37,6 +37,7 @@ hiddenimports += [
     'pomodoro.core.startup',
     'pomodoro.core.site_tracker',
     'pomodoro.core.todos',
+    'pomodoro.core.water',
     'pomodoro.ui',
     'pomodoro.ui.widgets',
     'pomodoro.ui.icons',
@@ -45,6 +46,7 @@ hiddenimports += [
     'pomodoro.ui.history_chart',
     'pomodoro.ui.setup_page',
     'pomodoro.ui.todo_page',
+    'pomodoro.ui.water_page',
 ]
 
 a = Analysis(
