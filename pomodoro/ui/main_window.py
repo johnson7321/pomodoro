@@ -268,15 +268,15 @@ class PomodoroApp:
 
     # ── 喝水提醒 ──
     def _water_tick(self) -> None:
-        """每 30 秒檢查一次是否該提醒喝水；提醒只響聲音並在主頁頂部／迷你視窗出現提示，不彈窗。"""
+        """每 30 秒檢查一次是否該提醒喝水；提醒不彈窗也不發聲，只在主頁頂部／迷你視窗出現提示。"""
         s = self.settings
         start, end = WA.parse_hhmm(s["water_start"]), WA.parse_hhmm(s["water_end"])
         plan = WA.make_plan(s["water_weight"], s["water_glass"], start, end)
         was_pending = self.water_reminder.pending
-        if self.water_reminder.check(
-                datetime.now(), enabled=s["water_enabled"], interval_min=plan["interval"],
-                start_min=start, end_min=end, goal_met=self.water_log.today_total() >= plan["target"]):
-            AL.play_chime(s["volume"])
+        # 喝水提醒從不發聲（以免打斷專注），只在畫面上顯示
+        self.water_reminder.check(
+            datetime.now(), enabled=s["water_enabled"], interval_min=plan["interval"],
+            start_min=start, end_min=end, goal_met=self.water_log.today_total() >= plan["target"])
         if self.water_reminder.pending != was_pending:
             self._update_water_pill()
         self.root.after(30000, self._water_tick)

@@ -18,7 +18,6 @@ from . import csv_logger as CL
 ML_PER_KG = 35
 MIN_TARGET, MAX_TARGET = 1500, 4000
 MIN_INTERVAL = 20
-REPEAT_MINUTES = 10  # 提醒後沒喝，每隔幾分鐘再提醒一次
 GLASS_CHOICES = (150, 200, 250, 300, 350, 500)
 
 
@@ -116,17 +115,15 @@ class WaterLog:
 # 提醒狀態機
 # ---------------------------------------------------------------------------
 class Reminder:
-    """check() 每隔一陣子呼叫一次；回傳 True 表示這次要響提醒（第一次或重複提醒）。"""
+    """check() 每隔一陣子呼叫一次；回傳 True 表示這次剛進入「該喝水」狀態（pending 直到記一杯才解除）。"""
 
     def __init__(self, now: datetime | None = None) -> None:
         self.last_ref = now or datetime.now()  # 上次喝水（或程式啟動）的時間，間隔從這裡起算
         self.pending = False  # 已經提醒、還沒喝
-        self._last_alert: datetime | None = None
 
     def drink(self, now: datetime | None = None) -> None:
         self.last_ref = now or datetime.now()
         self.pending = False
-        self._last_alert = None
 
     def next_due(self, interval_min: int) -> datetime:
         return self.last_ref + timedelta(minutes=interval_min)
@@ -143,12 +140,8 @@ class Reminder:
             self.last_ref = now
             return False
         if self.pending:
-            if self._last_alert and now - self._last_alert >= timedelta(minutes=REPEAT_MINUTES):
-                self._last_alert = now
-                return True
             return False
         if now >= self.next_due(interval_min):
             self.pending = True
-            self._last_alert = now
             return True
         return False

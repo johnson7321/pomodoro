@@ -9,7 +9,6 @@ import wave
 
 _RATE = 22050
 _PATTERN = ((880, 180), (1175, 180), (0, 80), (880, 180), (1175, 260))  # (Hz, 毫秒)
-_CHIME = ((660, 150), (880, 150), (1320, 260))  # 喝水提醒：比鬧鐘柔和短促
 _FADE = int(_RATE * 0.008)  # 淡入淡出，避免爆音
 
 
@@ -48,7 +47,3 @@ def play(volume: int, pattern=_PATTERN) -> None:
 
     threading.Thread(target=_run, daemon=True).start()
 
-
-def play_chime(volume: int) -> None:
-    """喝水提醒音。"""
-    play(volume, _CHIME)

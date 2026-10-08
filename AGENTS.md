@@ -23,7 +23,7 @@ v2.0 已把原本的單檔 `pomodoro_window.py` 拆成 `pomodoro/` 套件，分�
   - `todos.py` 待辦清單（`todos.json`，不進 git）與今日計畫換算：項目 `{id,text,est,done_count,done,today}`；
     `plan_summary()` 把排進今天的剩餘番茄換成專注分鐘（比對 `settings["daily_hours"]`）與含休息的預計完成時間
   - `water.py` 喝水：每日目標 = 體重 × 35 ml（取 50、限 1500～4000）、提醒間隔 = 清醒時間 ÷ 杯數（取 5 分、最短 20）；
-    `WaterLog` 存 `water_log.json`（不進 git，邏輯日→每次的 ml）；`Reminder` 狀態機（只在清醒時段、目標未達成時提醒，沒喝每 10 分鐘重複）
+    `WaterLog` 存 `water_log.json`（不進 git，邏輯日→每次的 ml）；`Reminder` 狀態機（只在清醒時段、目標未達成時提醒，pending 到記一杯為止）
   - `startup.py` 開機啟動：寫 `HKCU\...\Run` 的 `PomodoroTimer`，只在打包後的 exe 生效
 - `pomodoro/ui/` — customtkinter 畫面
   - `main_window.py` 主視窗，最大的檔，把 core 三者串起來
@@ -35,7 +35,7 @@ v2.0 已把原本的單檔 `pomodoro_window.py` 拆成 `pomodoro/` 套件，分�
   - `todo_page.py` 待辦頁（整頁，與設定頁同樣在視窗內切換）：今日計畫、新增、清單（預估番茄下拉選單、「今日」、設為目前任務、刪除）。
     「目前任務」存 `settings["current_task"]`，專注段落完成時 `_on_engine_complete` 呼叫 `record_pomodoro()` 記一個番茄；主頁左上只在有目前任務時顯示「目前：xxx」
   - `water_page.py` 喝水頁：今日進度與「喝了一杯」、體重／杯子大小／清醒時段／提醒開關（驗證失敗直接還原）、最近 7 天。
-    提醒不彈窗：`main_window._water_tick` 每 30 秒檢查，響柔和提示音（`alarm.play_chime`），主頁頂部出現水藍色按鈕「該喝水了 · 記一杯」（取代目前任務文字），
+    提醒不彈窗：`main_window._water_tick` 每 30 秒檢查，**從不發聲**（以免打斷專注），主頁頂部出現水藍色按鈕「該喝水了 · 記一杯」（取代目前任務文字），
     迷你視窗小字改「該喝水了」；Enter 或點按鈕記一杯。
   - `mini_view.py` 迷你模式畫面（Canvas：模式色漸層底、狀態小字、大時間、底部進度條）
   - `history_chart.py` 時間統計子視窗（摘要卡 + 每小時堆疊長條圖；matplotlib 圖的底色要取卡片色 `BG_GLASS_SOLID`，否則會看到色塊）
