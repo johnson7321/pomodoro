@@ -84,9 +84,8 @@ CSV 格式：`utf-8-sig`，欄位 `時間戳記,活動類型,持續時間`。
 1. **`MODE_CFG` 沒有 `"overtime"` 這個鍵。** `engine.mode` 的超時態只有 `"overtime"` 一個值，要先用
    `main_window._mode_key()`（看 `engine.overtime_kind`）轉成 `overtime_work` / `overtime_break`
    再查 `MODE_CFG`。直接寫 `MODE_CFG[self.engine.mode]` 在超時時會 KeyError。
-2. **時間到不彈窗，也不需要選擇：自動進入超時累加（`_enter_overtime`），不理它就是繼續超時。** 時間到時只在模式選擇列的位置換成一個捷徑
-   「開始休息／專注（Enter）」（`_show_prompt`），暫停、重置、統計等按鈕照常可用；沒有「繼續」按鈕，Esc 也不處理。
-   `_switch_mode` 與 `reset_timer` 會 `_hide_prompt()` 還原模式選擇列。必須在 `_enter_overtime` 之後才顯示，tick 才不會中斷。
+2. **時間到不彈窗、不顯示選擇區，自動進入超時累加（`_on_engine_complete` → `_enter_overtime`）。** 不理它就是繼續超時；
+   想換模式用 ←／→（或 1／2）或點切換列，`_select_mode` 在超時中也能切換（會先存檔超時段）。必須先 `_enter_overtime` tick 才不會中斷。
 3. **`csv_logger.append_row()` 的 `filename` 預設值在函式定義時就綁死了**，改 `CL.LOG_FILE` 不會生效；
    要換紀錄檔得從 cwd 下手。
 4. **不要跑 `pip install -r requirements.txt`。** 那是 233 包、UTF-16LE 編碼的全環境 freeze，

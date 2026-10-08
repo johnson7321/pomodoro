@@ -156,7 +156,7 @@ class PomodoroApp:
         self.mode_selector.grid(row=2, column=0, padx=30, pady=(0, 6), sticky="ew")
 
         # ── 控制：單一播放／暫停鈕（只有符號）＋ 重置 ──
-        btn_row = self.btn_row = ctk.CTkFrame(self.main, fg_color="transparent")
+        btn_row = ctk.CTkFrame(self.main, fg_color="transparent")
         btn_row.grid(row=3, column=0, pady=(12, 6))
 
         # 左側放一個和重置鈕同寬的空位，主按鈕才會在視窗正中央
@@ -175,7 +175,7 @@ class PomodoroApp:
         self.btn_reset.pack(side="left", padx=12)
 
         # ── 功能入口：兩顆並排的次要按鈕 ──
-        action_col = self.action_col = ctk.CTkFrame(self.main, fg_color="transparent")
+        action_col = ctk.CTkFrame(self.main, fg_color="transparent")
         action_col.grid(row=4, column=0, sticky="ew", padx=30, pady=(12, 22))
         action_col.grid_columnconfigure((0, 1, 2), weight=1, uniform="act")
 
@@ -193,50 +193,6 @@ class PomodoroApp:
             action_col, text="設定", icon="gear", icon_size=18,
             command=self.show_setup,
         ).grid(row=0, column=2, sticky="ew", padx=(3, 0))
-
-        self._build_prompt()
-
-    # ======================================================================
-    # 時間到提示（取代彈窗）：蓋在控制區的位置，底色透明，圓環與倒數照常可見
-    # ======================================================================
-    def _build_prompt(self) -> None:
-        """時間到不需要選擇：自動進入超時累加。這裡只在模式選擇列的位置放一個「開始休息／專注」捷徑，
-        其餘按鈕（暫停、重置…）照常可用，不理它就是繼續超時。"""
-        self._prompt_kind: str | None = None  # "work" / "break"：剛結束的模式；None 表示沒有捷徑
-        self.prompt = ctk.CTkFrame(self.main, fg_color="transparent")
-        self.prompt.grid_columnconfigure(0, weight=1)
-        self.prompt_title = ctk.CTkLabel(
-            self.prompt, text="", font=(T.FONT_FAMILY_UI, 14, "bold"), text_color=T.TEXT_PRIMARY, anchor="w")
-        self.prompt_title.grid(row=0, column=0, sticky="w")
-        self.prompt_switch = PillButton(
-            self.prompt, text="", color=T.MODE_CFG["work"]["color"], width=170, height=42,
-            hover=T.MODE_CFG["work"]["hover"], command=self._prompt_switch)
-        self.prompt_switch.grid(row=0, column=1, sticky="e")
-        self.prompt.grid(row=2, column=0, padx=30, pady=(0, 6), sticky="ew")
-        self.prompt.grid_remove()
-
-    def _show_prompt(self, kind: str) -> None:
-        """kind：剛結束的模式（work / break）。"""
-        self._prompt_kind = kind
-        nxt = "break" if kind == "work" else "work"
-        cfg, ncfg = T.MODE_CFG[kind], T.MODE_CFG[nxt]
-        self.prompt_title.configure(text=f"{cfg['name']}結束・超時中")
-        self.prompt_switch.configure(
-            text=f"開始{ncfg['name']}（Enter）", fg_color=ncfg["color"], hover_color=ncfg["hover"])
-        self.mode_selector.grid_remove()
-        self.prompt.grid()
-
-    def _hide_prompt(self) -> None:
-        if self._prompt_kind is None:
-            return
-        self._prompt_kind = None
-        self.prompt.grid_remove()
-        self.mode_selector.grid()
-
-    def _prompt_switch(self) -> None:
-        kind = self._prompt_kind
-        if kind:
-            self._switch_mode("break" if kind == "work" else "work", auto_start=True)
 
     # ======================================================================
     # 設定頁
@@ -591,7 +547,6 @@ class PomodoroApp:
         else:
             self._toggle_block(False)
 
-        self._hide_prompt()
         self.engine.switch_to(mode)
         self._apply_mode_ui(mode)
         self.mode_selector.set(self._seg_value_for(mode))
@@ -679,7 +634,6 @@ class PomodoroApp:
 
     def reset_timer(self) -> None:
         self._cancel_tick()
-        self._hide_prompt()
         self._save_current()
         self._toggle_block(False)
         self.engine.reset()
@@ -722,11 +676,8 @@ class PomodoroApp:
         if mode == "work":
             self.todo_page.record_pomodoro()  # 記到「目前任務」上
 
-        # 先進入超時累加並繼續 tick，再顯示頁面內的選擇區；
-        # 選擇之前的時間都會累加進超時，選「繼續」後沿用同一段累加。
+        # 時間到不問使用者：直接進入超時累加並繼續 tick。想換模式用 ←／→ 或點切換列。
         self._enter_overtime(mode)
-
-        self._show_prompt(mode)
 
     # ======================================================================
     # UI 狀態切換
@@ -839,10 +790,6 @@ class PomodoroApp:
             elif key == "r":
                 self.reset_timer()
             return
-        if self._prompt_kind:
-            if key in ("return", "kp_enter"):
-                self._prompt_switch()
-                return
         if self.water_reminder.pending and key in ("return", "kp_enter"):
             self._drink()  # 該喝水時 Enter 直接記一杯
             return
